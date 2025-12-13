@@ -5,6 +5,14 @@
 **Audit Start:** TBD  
 **Status:** Pending Submission
 
+
+## ⚠️ CRITICAL: Read This First
+
+**BSC USDC uses 18 decimals (NOT 6 like Ethereum USDC)**
+
+This is the most important thing auditors need to know. All contract calculations use 18-decimal USDC.
+See [AUDIT_NOTES.md](AUDIT_NOTES.md) for detailed explanation.
+
 ## Overview
 
 This repository contains the complete audit package for the SELF token presale smart contracts. The presale will launch on February 1st, 2026 on Binance Smart Chain (BSC).
