@@ -124,3 +124,38 @@ Please reach out via the contact information provided. We're available for clari
 ---
 
 **Last Updated:** December 13, 2025
+
+---
+
+## MockUSDC - Testing Only
+
+### ⚠️ NOT FOR AUDIT
+
+The file `contracts/test/MockUSDC.sol` is a **testing utility only** and should **NOT be audited**.
+
+**Purpose:**
+- Used in test suite to simulate BSC USDC behavior
+- Has `mint()` function for easy test setup
+- Uses 18 decimals to match real BSC USDC
+
+**NOT deployed to any network** - it's only used when running:
+```bash
+npx hardhat test  # Local testing only
+```
+
+### Real USDC Address
+
+The production presale will use the **official Binance-Peg USDC**:
+- **Address:** `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`
+- **Decimals:** 18
+- **Chain:** BSC Mainnet
+- **Verify:** https://bscscan.com/token/0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d
+
+### Audit Scope
+
+**In Scope (please audit):**
+- ✅ `contracts/SELFToken.sol`
+- ✅ `contracts/SELFPresale.sol`
+
+**Out of Scope (do NOT audit):**
+- ❌ `contracts/test/MockUSDC.sol` - Testing utility only
