@@ -14,7 +14,7 @@ SELF is launching a 5-round presale for its BEP-20 token on Binance Smart Chain.
 
 ## Smart Contract Scope
 
-### In Scope
+### ✅ IN SCOPE FOR AUDIT
 
 1. **SELFPresale.sol** (~500 lines)
    - 5-round presale logic
@@ -28,7 +28,17 @@ SELF is launching a 5-round presale for its BEP-20 token on Binance Smart Chain.
    - 500M total supply
    - OpenZeppelin Ownable
 
-### Out of Scope
+### ❌ NOT IN SCOPE (Certik Template Contracts)
+
+**The following contracts from Certik's generic template are NOT part of this audit:**
+
+- **SELFBonusStaking.sol** - Not used in this project
+- **SELFOracle.sol** - Not used in this project  
+- **SELFVesting.sol** - Not used (vesting handled within SELFPresale.sol)
+
+**Note:** This project uses integrated vesting within the presale contract rather than separate vesting/staking/oracle contracts.
+
+### Out of Scope (General)
 
 - Frontend application
 - Backend services

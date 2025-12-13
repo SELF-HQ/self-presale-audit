@@ -17,10 +17,19 @@ See [AUDIT_NOTES.md](AUDIT_NOTES.md) for detailed explanation.
 
 This repository contains the complete audit package for the SELF token presale smart contracts. The presale will launch on February 1st, 2026 on Binance Smart Chain (BSC).
 
-## Contracts
+## Contracts for Audit
+
+### ✅ In Scope (2 contracts):
 
 - **SELFToken.sol** - ERC20 token contract (500M total supply)
-- **SELFPresale.sol** - 5-round presale contract with USDC payments
+- **SELFPresale.sol** - 5-round presale contract with USDC payments and integrated vesting
+
+### ❌ Not In Scope:
+
+Certik's template mentioned these contracts, but they are **NOT part of this project**:
+- SELFBonusStaking.sol (not used)
+- SELFOracle.sol (not used)
+- SELFVesting.sol (not used - vesting is integrated in SELFPresale.sol)
 
 ## Key Features
 
@@ -30,7 +39,7 @@ This repository contains the complete audit package for the SELF token presale s
 - Soft cap: $500,000
 - Hard cap: $2,500,000
 - Payment: USDC (Binance-Peg) on BSC
-- Vesting: 6-month linear vesting for locked tokens
+- Vesting: 10-month linear vesting for locked tokens
 
 ## Repository Contents
 
