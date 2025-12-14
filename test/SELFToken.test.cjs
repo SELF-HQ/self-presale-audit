@@ -74,7 +74,7 @@ describe("SELFToken", function () {
     it("Should reject ownership transfer from non-owner", async function () {
       await expect(
         selfToken.connect(user1).transferOwnership(user2.address)
-      ).to.be.revertedWithCustomError(selfToken, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("Ownable: caller is not the owner");
     });
 
     it("Should allow renouncing ownership", async function () {
@@ -107,7 +107,7 @@ describe("SELFToken", function () {
       
       await expect(
         selfToken.connect(user1).transferFrom(owner.address, user2.address, amount)
-      ).to.be.revertedWithCustomError(selfToken, "ERC20InsufficientAllowance");
+      ).to.be.revertedWith("ERC20: insufficient allowance");
     });
 
     it("Should decrease allowance after delegated transfer", async function () {
