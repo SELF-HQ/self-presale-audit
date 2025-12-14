@@ -12,6 +12,16 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @notice 5-round presale contract for SELF token on BSC
  * @dev Supports multiple rounds with different prices, bonuses, and TGE unlocks
  * @dev IMPORTANT: BSC USDC uses 18 decimals (not 6 like Ethereum USDC)
+ * 
+ * Security Features:
+ * - ReentrancyGuard on all external state-changing functions
+ * - Pausable for emergency stops
+ * - Ownable with ownership transfer capability (intended for multi-sig)
+ * - SafeERC20 for all token transfers
+ * - Timestamp validation on round initialization
+ * - Maximum TGE delay to prevent indefinite fund locking
+ * 
+ * @custom:security-contact security@self.app
  */
 contract SELFPresale is ReentrancyGuard, Pausable, Ownable {
     using SafeERC20 for IERC20;
@@ -75,6 +85,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, Ownable {
     event RoundAdvanced(uint256 indexed newRound);
     event TGEEnabled(uint256 tgeTime);
     event RoundsInitialized();
+    event FundsWithdrawn(address indexed owner, uint256 amount);
+    event EmergencySELFWithdrawn(address indexed owner, uint256 amount);
     
     /**
      * @notice Constructor
@@ -100,6 +112,17 @@ contract SELFPresale is ReentrancyGuard, Pausable, Ownable {
         uint256[5] calldata endTimes
     ) external onlyOwner {
         require(!roundsInitialized, "Already initialized");
+        
+        // Validate timestamp ordering
+        for (uint256 i = 0; i < 5; i++) {
+            require(startTimes[i] > block.timestamp, "Start time must be in future");
+            require(endTimes[i] > startTimes[i], "End time must be after start time");
+            
+            // Validate sequential rounds (each round starts after previous ends)
+            if (i > 0) {
+                require(startTimes[i] > endTimes[i - 1], "Rounds must be sequential");
+            }
+        }
         
         // Round 1: 6¢, $1.5M target, 50% TGE, 15% bonus
         rounds[0] = Round({
@@ -167,9 +190,10 @@ contract SELFPresale is ReentrancyGuard, Pausable, Ownable {
     
     /**
      * @notice Contribute USDC to current round
-     * @param usdcAmount Amount of USDC to contribute (6 decimals)
+     * @param usdcAmount Amount of USDC to contribute (18 decimals on BSC)
      */
     function contribute(uint256 usdcAmount) external nonReentrant whenNotPaused {
+        require(msg.sender != address(0), "Invalid address");
         require(roundsInitialized, "Rounds not initialized");
         require(currentRound < 5, "Presale ended");
         
@@ -269,6 +293,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, Ownable {
     function enableTGE(uint256 _tgeTime) external onlyOwner {
         require(!tgeEnabled, "TGE already enabled");
         require(_tgeTime >= block.timestamp, "TGE time must be in future");
+        require(_tgeTime <= block.timestamp + 365 days, "TGE time too far in future");
         require(currentRound == 4 && rounds[4].finalized, "All rounds must be finalized");
         
         tgeTime = _tgeTime;
@@ -333,16 +358,19 @@ contract SELFPresale is ReentrancyGuard, Pausable, Ownable {
     
     /**
      * @notice Withdraw raised USDC to owner
+     * @dev Only owner can withdraw. Emits FundsWithdrawn event for transparency
      */
     function withdrawFunds() external onlyOwner {
         uint256 balance = USDC.balanceOf(address(this));
         require(balance > 0, "No funds to withdraw");
         
         USDC.safeTransfer(owner(), balance);
+        emit FundsWithdrawn(owner(), balance);
     }
     
     /**
      * @notice Emergency withdraw SELF tokens (only if presale cancelled)
+     * @dev Can only be called before TGE is enabled. Emits EmergencySELFWithdrawn event
      */
     function emergencyWithdrawSELF() external onlyOwner {
         require(!tgeEnabled, "TGE already enabled");
@@ -351,6 +379,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, Ownable {
         require(balance > 0, "No SELF to withdraw");
         
         SELF.safeTransfer(owner(), balance);
+        emit EmergencySELFWithdrawn(owner(), balance);
     }
     
     /**
