@@ -448,6 +448,6 @@ The primary risk is centralized owner control, which is mitigated by using a mul
 ---
 
 **Document Version:** 1.0  
-**Last Updated:** December 13, 2025  
+**Last Updated:** December 14, 2025  
 **Next Review:** After Certik Audit
 
