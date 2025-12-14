@@ -10,6 +10,20 @@
 
 The SELF token presale is a multi-round fundraising mechanism deployed on Binance Smart Chain (BSC). It enables users to purchase SELF tokens using USDC across 5 rounds with progressively higher prices and lower bonuses over a 40-day period.
 
+### ⚠️ CRITICAL: BSC USDC Decimal Configuration
+
+**IMPORTANT:** Binance Smart Chain (BSC) USDC uses **18 decimals**, not 6 decimals like Ethereum USDC. This is a critical difference that affects all calculations and amounts throughout the contract.
+
+- **BSC USDC Contract:** `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`
+- **Decimals:** 18 (not 6)
+- **All amounts in this contract use 18 decimals:**
+  - `MIN_CONTRIBUTION = 100 * 1e18` = $100 USDC
+  - `MAX_CONTRIBUTION = 10_000 * 1e18` = $10,000 USDC
+  - `SOFT_CAP = 500_000 * 1e18` = $500,000 USDC
+  - `HARD_CAP = 2_500_000 * 1e18` = $2,500,000 USDC
+
+**When integrating with this contract, ensure all USDC amounts are scaled to 18 decimals, not 6.**
+
 ### Key Features
 
 - **5-Round Dynamic Pricing:** 6¢ → 10¢
@@ -375,17 +389,17 @@ After 10 months: Claim all 19,166.67 SELF
 - Users provide valid USDC
 - No malicious token contracts
 
-### Attack Surface
+### External Interactions
 
-**External Calls:**
-1. `USDC.transferFrom()` - User to contract
-2. `USDC.transfer()` - Contract to owner (withdrawal)
+**Token Transfers:**
+1. `USDC.transferFrom()` - User to contract (contribution)
+2. `USDC.transfer()` - Contract to treasury (withdrawal)
 3. `SELF.transfer()` - Contract to user (claiming)
 
-**All protected by:**
-- SafeERC20 library
-- ReentrancyGuard modifier
-- Checks-Effects-Interactions pattern
+**Security Implementation:**
+- SafeERC20 library for safe token operations
+- ReentrancyGuard modifier on all state-changing functions
+- Checks-Effects-Interactions pattern throughout
 
 ### Access Control Matrix
 
@@ -492,24 +506,15 @@ event TokensClaimed(address indexed user, uint256 amount);
 
 ## Emergency Procedures
 
-### Pause Scenario
+### Emergency Procedures
 
-**When to pause:**
-- Critical bug discovered
-- Unusual activity detected
-- Oracle manipulation (N/A - no oracles)
-- External contract compromise
-
-**Actions:**
-1. Call `pause()` immediately
-2. Investigate issue
+**If emergency pause is needed:**
+1. Call `pause()` to halt contributions
+2. Assess situation and determine resolution
 3. Communicate with community
-4. Implement fix if needed
-5. Resume with `unpause()` or refund
+4. Resume with `unpause()` when safe
 
-### Refund Scenario
-
-**If presale must be cancelled:**
+**If presale cancellation is necessary:**
 1. Do NOT enable TGE
 2. Call `emergencyWithdrawSELF()` to recover SELF
 3. Manual USDC refunds to contributors
