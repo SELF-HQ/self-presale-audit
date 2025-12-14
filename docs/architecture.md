@@ -1,7 +1,7 @@
 # SELF Token Presale - Architecture Documentation
 
 **Version:** 1.0  
-**Date:** December 13, 2024  
+**Date:** December 13, 2025  
 **Status:** Ready for Audit  
 
 ---
