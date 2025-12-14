@@ -42,3 +42,8 @@ pnpm-debug.log*
 # Test outputs
 .nyc_output/
 test-results/
+
+# Internal progress tracking - not for audit submission
+FIXES_NEEDED.md
+FIXES_COMPLETED.md
+ALL_FIXES_COMPLETE.md
