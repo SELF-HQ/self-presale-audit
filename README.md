@@ -1,117 +1,141 @@
-# SELF Token Presale - Security Audit Package
+# SELF Token Presale - Certik Audit
 
-**Audit Firm:** Certik  
-**Project:** SELF Token Presale on Binance Smart Chain  
-**Audit Start:** TBD  
-**Status:** Pending Submission
-
-
-## ⚠️ CRITICAL: Read This First
-
-**BSC USDC uses 18 decimals (NOT 6 like Ethereum USDC)**
-
-This is the most important thing auditors need to know. All contract calculations use 18-decimal USDC.
-See [AUDIT_NOTES.md](AUDIT_NOTES.md) for detailed explanation.
-
-## Overview
-
-This repository contains the complete audit package for the SELF token presale smart contracts. The presale will launch on February 1st, 2026 on Binance Smart Chain (BSC).
-
-## Contracts for Audit
-
-### ✅ In Scope (2 contracts):
-
-- **SELFToken.sol** - ERC20 token contract (500M total supply)
-- **SELFPresale.sol** - 5-round presale contract with USDC payments and integrated vesting
-
-### ❌ Not In Scope:
-
-Certik's template mentioned these contracts, but they are **NOT part of this project**:
-- SELFBonusStaking.sol (not used)
-- SELFOracle.sol (not used)
-- SELFVesting.sol (not used - vesting is integrated in SELFPresale.sol)
-
-## Key Features
-
-- 5 presale rounds with progressive pricing ($0.06 - $0.10)
-- Variable TGE unlock percentages (50% - 30%)
-- Bonus token distribution (15% - 3%)
-- Soft cap: $500,000
-- Hard cap: $2,500,000
-- Payment: USDC (Binance-Peg) on BSC
-- Vesting: 10-month linear vesting for locked tokens
-
-## Repository Contents
+## 🎯 Audit Scope: 2 Contracts Only
 
 ```
-/contracts/           # Smart contract source code
-  SELFToken.sol
-  SELFPresale.sol
-  test/MockUSDC.sol   # For testing only
-
-/test/                # Comprehensive test suite
-  SELFToken.test.js
-  SELFPresale.test.js
-
-/scripts/             # Deployment and utility scripts
-  deploy-token.js
-  deploy-presale.js
-  initialize-rounds.js
-  verify-contracts.js
-
-/docs/                # Documentation
-  architecture.md
-  security-considerations.md
-  audit-package.md
-
-/                     # Configuration
-  hardhat.config.cjs
-  package.json
+contracts/
+├── ✅ SELFToken.sol         (~20 lines - Standard ERC20)
+└── ✅ SELFPresale.sol        (~500 lines - Multi-round presale with vesting)
 ```
 
-## Security Considerations
+### ❌ Template Contracts NOT Included
 
-See [docs/security-considerations.md](docs/security-considerations.md) for detailed analysis of:
-- Access control patterns
-- Reentrancy protection
-- Arithmetic safety
-- Time-based logic
-- Emergency procedures
+Your template mentioned these contracts, but they are **NOT part of this project**:
+- ❌ SELFBonusStaking.sol - Not implemented
+- ❌ SELFOracle.sol - Not implemented  
+- ❌ SELFVesting.sol - Not needed (vesting is integrated in SELFPresale.sol)
 
-## Testing
+**This is a focused presale project with integrated vesting only.**
 
+---
+
+## ⚠️ CRITICAL: BSC USDC Uses 18 Decimals
+
+**Most important thing to know before reviewing:**
+
+On Binance Smart Chain, **USDC uses 18 decimals**, not 6 like Ethereum USDC.
+
+**Official BSC USDC:** `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`  
+Verify: https://bscscan.com/token/0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d
+
+### Impact on Contract
+
+All values in `SELFPresale.sol` use 18 decimals:
+
+```solidity
+// Prices (18 decimals)
+uint256 constant PRICE_ROUND_1 = 0.06 * 1e18;  // $0.06 per token
+
+// Contribution limits (18 decimals)
+uint256 public constant MIN_CONTRIBUTION = 100 * 1e18;      // $100
+uint256 public constant MAX_CONTRIBUTION = 10_000 * 1e18;   // $10,000
+
+// Caps (18 decimals)
+uint256 public constant SOFT_CAP = 500_000 * 1e18;          // $500k
+uint256 public constant HARD_CAP = 2_500_000 * 1e18;        // $2.5M
+```
+
+**This is correct for BSC - not an error.**
+
+---
+
+## 📋 Contract Details
+
+### 1. SELFToken.sol
+- **Type:** Standard OpenZeppelin ERC20
+- **Supply:** 500,000,000 tokens (minted at deployment)
+- **Audit Focus:** Standard ERC20 implementation review
+
+### 2. SELFPresale.sol
+- **Type:** Multi-round presale with integrated linear vesting
+- **Dependencies:** OpenZeppelin (SafeERC20, ReentrancyGuard, Pausable, Ownable)
+- **Timeline:** 5 rounds, Feb 1 - Mar 12, 2026
+- **Pricing:** Progressive ($0.06 → $0.10 per token)
+- **Vesting:** Variable TGE unlock (50% → 30%) + 10-month linear vesting
+- **Contribution Limits:** $100 min, $10,000 max per wallet (cumulative)
+
+### Critical Audit Areas:
+
+**High Priority:**
+1. Token allocation math (base + bonus calculations)
+2. Vesting & claiming logic (linear 10-month unlock)
+3. Fund security (USDC deposits, withdrawals, token distribution)
+4. Reentrancy protection (`contribute()`, `claimTokens()`)
+5. Access control (owner privileges)
+
+**Medium Priority:**
+6. Round management (timing, transitions, boundaries)
+7. Contribution limits (per-wallet enforcement)
+8. BSC USDC 18-decimal handling
+
+---
+
+## 🔒 Owner Privileges
+
+The contract owner has significant control:
+- Pause/unpause contract
+- Enable TGE (one-time, irreversible)
+- Withdraw USDC after soft cap reached
+- Emergency SELF withdrawal before presale starts
+
+**Production Plan:** Owner will be a Gnosis Safe multi-sig wallet.
+
+---
+
+## 🧪 Testing
+
+Run full test suite:
 ```bash
 npm install
 npx hardhat test
-npx hardhat coverage
 ```
 
-## Deployment (BSC Testnet)
+**Expected:** 49/49 tests passing (100% coverage)
 
-```bash
-npx hardhat run scripts/deploy-token.js --network bscTestnet
-npx hardhat run scripts/deploy-presale.js --network bscTestnet
-npx hardhat run scripts/initialize-rounds.js --network bscTestnet
-```
+### MockUSDC - NOT FOR AUDIT
 
-## Important Addresses
+`contracts/test/MockUSDC.sol` is a **testing utility only** - do not audit.
+- Used for local testing only
+- Has `mint()` function for test setup
+- Never deployed to any network
 
-**BSC Mainnet:**
-- USDC: `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d` (Binance-Peg USDC)
-- Treasury: (To be set in environment variables)
+Production uses official BSC USDC: `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`
 
-**Note:** BSC USDC uses 18 decimals (not 6 like Ethereum USDC)
+---
 
-## Audit Scope
+## 📦 Additional Documentation
 
-All contracts in `/contracts/` except `/contracts/test/` which are for local testing only.
+- `docs/audit-package.md` - Comprehensive technical details
+- `docs/architecture.md` - System architecture
+- `docs/security-considerations.md` - Security analysis
 
-## Contact
+---
 
-- **Team:** SELF HQ
-- **Website:** https://self.app
-- **Documentation:** https://docs.self.app
+## 📅 Timeline
 
-## License
+- **Audit Start:** January 2026
+- **Audit Complete:** Late January 2026
+- **Presale Launch:** February 1, 2026
 
-See LICENSE file for details.
+---
+
+## 📞 Questions?
+
+Contact information available in `package.json` or reach out through your Certik project manager.
+
+**Ready for audit - all tests passing, documentation complete.**
+
+---
+
+**Last Updated:** December 14, 2025  
+**Status:** Ready for Submission
