@@ -49,6 +49,29 @@ uint256 constant MAX_CONTRIBUTION = 10_000 * 1e18;   // $10,000
 uint256 constant SOFT_CAP = 500_000 * 1e18;          // $500k
 uint256 constant HARD_CAP = 2_500_000 * 1e18;        // $2.5M
 ```
+## Governance & Security
+
+### Multisig Wallet
+
+All privileged contract roles and undistributed tokens are controlled by a 2-of-3 multisig wallet for security.
+
+**Safe Multisig Address:** `0x34747FFFB47e07025b38bB7e06D92FABbc81cC20`
+
+**Signers:**
+- Signer 1: `0x0Ef1692fb24e9baFCdF599f72fBe81841E52c349`
+- Signer 2: `0xD7286BB3983316FF3b2e8A27CABc976aA820Ac97`
+- Signer 3: `0xF1164C0208168676DF682f7b66AFF4921ec4bF32`
+
+### Contract Roles Assigned to Multisig
+- DEFAULT_ADMIN_ROLE
+- TREASURY_ROLE
+- TGE_ENABLER_ROLE
+- ROUND_MANAGER_ROLE
+- PAUSER_ROLE
+
+*All privileged operations require 2-of-3 signer approval plus a timelock delay.*
+
+**Published source:** `https://docs.self.app/tokenomics`
 
 ## Testing
 
@@ -57,7 +80,7 @@ npm install
 npx hardhat test
 ```
 
-44 tests covering token functionality, presale logic, vesting, and edge cases.
+Tests cover token functionality, presale logic, vesting, and edge cases.
 
 `contracts/test/MockUSDC.sol` is a test utility only (18-decimal USDC simulator).
 

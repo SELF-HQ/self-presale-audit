@@ -27,10 +27,6 @@ describe("SELFToken", function () {
       expect(await selfToken.totalSupply()).to.equal(totalSupply);
       expect(await selfToken.balanceOf(owner.address)).to.equal(totalSupply);
     });
-
-    it("Should set deployer as owner", async function () {
-      expect(await selfToken.owner()).to.equal(owner.address);
-    });
   });
 
   describe("Transfers", function () {
@@ -62,25 +58,6 @@ describe("SELFToken", function () {
       expect(finalOwnerBalance).to.equal(initialOwnerBalance - (amount * 2n));
       expect(await selfToken.balanceOf(user1.address)).to.equal(amount);
       expect(await selfToken.balanceOf(user2.address)).to.equal(amount);
-    });
-  });
-
-  describe("Ownership", function () {
-    it("Should transfer ownership", async function () {
-      await selfToken.transferOwnership(user1.address);
-      expect(await selfToken.owner()).to.equal(user1.address);
-    });
-
-    it("Should reject ownership transfer from non-owner", async function () {
-      await expect(
-        selfToken.connect(user1).transferOwnership(user2.address)
-      ).to.be.revertedWith("Ownable: caller is not the owner");
-    });
-
-    it("Should allow renouncing ownership", async function () {
-      await selfToken.renounceOwnership();
-      
-      expect(await selfToken.owner()).to.equal(ethers.ZeroAddress);
     });
   });
 

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title SELFToken
@@ -10,15 +9,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @dev Total supply: 500 million SELF tokens
  * 
  * @custom:oz-version Compatible with OpenZeppelin Contracts v4.x
- *                    If upgrading to OZ v5.x, update constructor to:
- *                    `constructor() ERC20("SELF Token", "SELF") Ownable(msg.sender)`
  * @custom:security-contact security@self.app
  */
-contract SELFToken is ERC20, Ownable {
+contract SELFToken is ERC20 {
     /**
      * @notice Deploy SELF token with fixed supply
      * @dev Mints entire supply to deployer. No additional minting capability.
-     *      Uses OpenZeppelin v4.x Ownable (msg.sender is implicitly owner).
      */
     constructor() ERC20("SELF Token", "SELF") {
         // Mint 500 million tokens to the deployer

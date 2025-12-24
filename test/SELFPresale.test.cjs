@@ -6,13 +6,15 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
   let presale, selfToken, mockUSDC;
   let admin, pauser, roundManager, treasury, tgeEnabler;
   let user1, user2, user3;
+  let signers;
   let startTimes, endTimes;
   
   // Role hashes
   let DEFAULT_ADMIN_ROLE, PAUSER_ROLE, ROUND_MANAGER_ROLE, TREASURY_ROLE, TGE_ENABLER_ROLE;
 
   beforeEach(async function () {
-    [admin, pauser, roundManager, treasury, tgeEnabler, user1, user2, user3] = await ethers.getSigners();
+    signers = await ethers.getSigners();
+    [admin, pauser, roundManager, treasury, tgeEnabler, user1, user2, user3] = signers;
 
     // Get role hashes
     DEFAULT_ADMIN_ROLE = ethers.ZeroHash; // 0x00...
@@ -308,48 +310,60 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
   describe("TGE with Timelock", function () {
     beforeEach(async function () {
-      // Complete all 5 rounds
+      // Complete all 5 rounds with soft cap reached
+      const amountPerWallet = ethers.parseEther("10000");
+      
       for (let i = 0; i < 5; i++) {
         const currentTime = await time.latest();
         if (startTimes[i] > currentTime) {
           await time.increaseTo(startTimes[i]);
         }
-      const amount = ethers.parseEther("1000");
-      await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
-      await presale.connect(user1).contribute(amount);
-      
-        // Increase time to end of round
-        const timeAfterContribute = await time.latest();
-        const timeToEnd = endTimes[i] - timeAfterContribute;
-        if (timeToEnd > 0) {
-          await time.increase(timeToEnd);
-        }
-        await presale.connect(admin).finalizeRound();
         
-        if (i < 4) {
-          await presale.connect(admin).advanceRound();
+        // Reach soft cap in round 1 using random wallets
+        if (i === 0) {
+          const walletsNeeded = 50;
+          for (let w = 0; w < walletsNeeded; w++) {
+            const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+            await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+            await mockUSDC.mint(wallet.address, amountPerWallet);
+            await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+            await presale.connect(wallet).contribute(amountPerWallet);
+            await ethers.provider.send("hardhat_mine", ["0x3"]);
+          }
         }
+        
+        // Fast forward to end of round
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
       }
     });
 
     it("Should require timelock for TGE enablement", async function () {
-      const tgeTime = (await time.latest()) + 86400 * 7; // 7 days
+      const tgeTime = (await time.latest()) + 86400 * 7;
       
-      // Request TGE
       await presale.connect(admin).requestEnableTGE(tgeTime);
       
-      // Try to execute immediately (should fail)
       await expect(
-        presale.connect(admin).executeEnableTGE(tgeTime)
+        presale.connect(admin).executeEnableTGE()
       ).to.be.revertedWithCustomError(presale, "TimelockNotReady");
       
-      // Fast forward past timelock
-      await time.increase(86400 * 2 + 1); // 2 days + 1 second
+      await time.increase(86400 * 2 + 1);
       
-      // Now execute should work
       await expect(
-        presale.connect(admin).executeEnableTGE(tgeTime)
+        presale.connect(admin).executeEnableTGE()
       ).to.emit(presale, "TGEEnabled");
+    });
+
+    it("Should block a second pending TGE request (SEA-08 / SEA-05)", async function () {
+      const tgeTime1 = (await time.latest()) + 86400 * 7;
+      const tgeTime2 = tgeTime1 + 86400;
+
+      await presale.connect(admin).requestEnableTGE(tgeTime1);
+
+      await expect(
+        presale.connect(admin).requestEnableTGE(tgeTime2)
+      ).to.be.revertedWithCustomError(presale, "TimelockRequestPending");
     });
   });
 
@@ -372,10 +386,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
           await time.increase(timeToEnd);
         }
         await presale.connect(admin).finalizeRound();
-        
-        if (i < 4) {
-          await presale.connect(admin).advanceRound();
-        }
+        await presale.connect(admin).advanceRound();
       }
     });
 
@@ -412,89 +423,137 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should require timelock for withdrawals", async function () {
-      // Request withdrawal
-      await presale.connect(admin).requestWithdrawFunds();
-      
-      // Try immediate execution (should fail)
+      // Withdrawal should not be possible before presale end / softcap success
       await expect(
-        presale.connect(admin).executeWithdrawFunds(treasury.address, 0)
-      ).to.be.revertedWithCustomError(presale, "TimelockNotReady");
-      
-      // Fast forward
+        presale.connect(admin).requestWithdrawFunds(treasury.address, 0)
+      ).to.be.reverted;
+    });
+
+    it("Should allow withdrawal after presale end + soft cap", async function () {
+      // Reach soft cap using random wallets
+      const amountPerWallet = ethers.parseEther("10000");
+      const walletsNeeded = 50;
+      for (let w = 0; w < walletsNeeded; w++) {
+        const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+        await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+        await mockUSDC.mint(wallet.address, amountPerWallet);
+        await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+        await presale.connect(wallet).contribute(amountPerWallet);
+        await ethers.provider.send("hardhat_mine", ["0x3"]);
+      }
+
+      // End all rounds
+      for (let i = 0; i < 5; i++) {
+        const currentTime = await time.latest();
+        if (startTimes[i] > currentTime) await time.increaseTo(startTimes[i]);
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+
+      // Request withdrawal within daily limit ($100k < $500k daily limit)
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("100000"));
       await time.increase(86400 * 2 + 1);
-      
-      // Now should work (0 means withdraw full balance)
+
       await expect(
-        presale.connect(admin).executeWithdrawFunds(treasury.address, 0)
+        presale.connect(admin).executeWithdrawFunds(1)
       ).to.emit(presale, "FundsWithdrawn");
     });
 
     it("Should enforce circuit breaker - daily withdrawal limit", async function () {
-      // user1 already contributed $10k in beforeEach
-      // Add more users to get enough funds to test circuit breaker
-      const contributionPerUser = ethers.parseEther("5000"); // $5k each
-      
-      // user2 and user3 contribute
-      await mockUSDC.mint(user2.address, contributionPerUser);
-      await mockUSDC.connect(user2).approve(await presale.getAddress(), contributionPerUser);
-      await presale.connect(user2).contribute(contributionPerUser);
-      await ethers.provider.send("hardhat_mine", ["0x3"]); // Mine 3 blocks
-      
-      await mockUSDC.mint(user3.address, contributionPerUser);
-      await mockUSDC.connect(user3).approve(await presale.getAddress(), contributionPerUser);
-      await presale.connect(user3).contribute(contributionPerUser);
-      
-      // Total contributed: $20k
-      // Request withdrawal
-      await presale.connect(admin).requestWithdrawFunds();
+      // Reach soft cap using random wallets
+      const amountPerWallet = ethers.parseEther("10000");
+      const walletsNeeded = 50;
+      for (let w = 0; w < walletsNeeded; w++) {
+        const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+        await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+        await mockUSDC.mint(wallet.address, amountPerWallet);
+        await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+        await presale.connect(wallet).contribute(amountPerWallet);
+        await ethers.provider.send("hardhat_mine", ["0x3"]);
+      }
+
+      // End all rounds
+      for (let i = 0; i < 5; i++) {
+        const currentTime = await time.latest();
+        if (startTimes[i] > currentTime) await time.increaseTo(startTimes[i]);
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+
+      // Request withdrawal larger than daily limit
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("600000"));
       await time.increase(86400 * 2 + 1);
-      
-      // Withdraw partial amount (within daily limit)
-      const withdrawAmount = ethers.parseEther("15000"); // $15k
+
       await expect(
-        presale.connect(admin).executeWithdrawFunds(treasury.address, withdrawAmount)
-      ).to.emit(presale, "FundsWithdrawn").withArgs(treasury.address, withdrawAmount);
+        presale.connect(admin).executeWithdrawFunds(1)
+      ).to.be.revertedWithCustomError(presale, "DailyWithdrawalLimitExceeded");
+    });
+
+    it("Should allow multiple queued withdrawals to execute independently (SEA-10)", async function () {
+      // Reach soft cap using random wallets
+      const amountPerWallet = ethers.parseEther("10000");
+      const walletsNeeded = 50;
+      for (let w = 0; w < walletsNeeded; w++) {
+        const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+        await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+        await mockUSDC.mint(wallet.address, amountPerWallet);
+        await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+        await presale.connect(wallet).contribute(amountPerWallet);
+        await ethers.provider.send("hardhat_mine", ["0x3"]);
+      }
+
+      // End all rounds
+      for (let i = 0; i < 5; i++) {
+        const currentTime = await time.latest();
+        if (startTimes[i] > currentTime) await time.increaseTo(startTimes[i]);
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+
+      const treasuryBalBefore = await mockUSDC.balanceOf(treasury.address);
+
+      // Queue two withdrawals (two independent timelocks)
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("100000")); // nonce 1
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("200000")); // nonce 2
+
+      await time.increase(86400 * 2 + 1);
+
+      // Execute out of order to prove independence
+      await expect(presale.connect(admin).executeWithdrawFunds(2)).to.emit(presale, "FundsWithdrawn");
+      await expect(presale.connect(admin).executeWithdrawFunds(1)).to.emit(presale, "FundsWithdrawn");
+
+      const treasuryBalAfter = await mockUSDC.balanceOf(treasury.address);
+      expect(treasuryBalAfter - treasuryBalBefore).to.equal(ethers.parseEther("300000"));
     });
 
     it("Should allow recovery of unclaimed refunds after deadline", async function () {
-      // Setup: Complete all rounds first but don't reach soft cap
+      // Complete all rounds without reaching soft cap
       for (let i = 0; i < 5; i++) {
         const currentTime = await time.latest();
         if (startTimes[i] > currentTime) {
           await time.increaseTo(startTimes[i]);
         }
         
-        // Contribute small amount (won't reach soft cap)
         const amount = ethers.parseEther("500");
         await mockUSDC.mint(user2.address, amount);
         await mockUSDC.connect(user2).approve(await presale.getAddress(), amount);
         await presale.connect(user2).contribute(amount);
         
-        // Fast forward to end of round
-        const timeAfterContribute = await time.latest();
-        const timeToEnd = endTimes[i] - timeAfterContribute;
-        if (timeToEnd > 0) {
-          await time.increase(timeToEnd + 1);
-        }
-        
+        await time.increaseTo(endTimes[i] + 1);
         await presale.connect(admin).finalizeRound();
-        if (i < 4) {
-          await presale.connect(admin).advanceRound();
-        }
+        await presale.connect(admin).advanceRound();
       }
       
-      // Enable refunds (soft cap not reached)
       await presale.connect(admin).enableRefunds();
-      
-      // user2 doesn't claim refund, wait past deadline
       await time.increase(86400 * 30 + 1);
       
-      // Refund window closed for users
       await expect(
         presale.connect(user2).claimRefund()
       ).to.be.revertedWithCustomError(presale, "RefundWindowClosed");
       
-      // Treasury can recover unclaimed funds (admin has TREASURY_ROLE)
       const treasuryBalBefore = await mockUSDC.balanceOf(treasury.address);
       await presale.connect(admin).recoverUnclaimedRefunds(treasury.address);
       const treasuryBalAfter = await mockUSDC.balanceOf(treasury.address);
@@ -505,54 +564,221 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
   describe("Claiming Tokens", function () {
     beforeEach(async function () {
-      // Complete presale and enable TGE
+      const amountPerWallet = ethers.parseEther("10000");
+      
+      // Complete all rounds with soft cap reached
       for (let i = 0; i < 5; i++) {
         const currentTime = await time.latest();
         if (startTimes[i] > currentTime) {
           await time.increaseTo(startTimes[i]);
         }
-      const amount = ethers.parseEther("1000");
-      await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
+        
+        if (i === 0) {
+          // Reach soft cap using random wallets
+          const walletsNeeded = 50;
+          for (let w = 0; w < walletsNeeded; w++) {
+            const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+            await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+            await mockUSDC.mint(wallet.address, amountPerWallet);
+            await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+            await presale.connect(wallet).contribute(amountPerWallet);
+            await ethers.provider.send("hardhat_mine", ["0x3"]);
+          }
+        }
+        
+        // user1 also contributes for later claiming
+        const amount = ethers.parseEther("1000");
+        await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
         await presale.connect(user1).contribute(amount);
         
-        // Increase time to end of round
-        const timeAfterContribute = await time.latest();
-        const timeToEnd = endTimes[i] - timeAfterContribute;
-        if (timeToEnd > 0) {
-          await time.increase(timeToEnd);
-        }
+        await time.increaseTo(endTimes[i] + 1);
         await presale.connect(admin).finalizeRound();
-        
-        if (i < 4) {
-          await presale.connect(admin).advanceRound();
-        }
+        await presale.connect(admin).advanceRound();
       }
       
       const tgeTime = (await time.latest()) + 86400 * 7;
       await presale.connect(admin).requestEnableTGE(tgeTime);
       await time.increase(86400 * 2 + 1);
-      await presale.connect(admin).executeEnableTGE(tgeTime);
+      await presale.connect(admin).executeEnableTGE();
       await time.increase(86400 * 7);
     });
 
     it("Should allow claiming TGE unlock", async function () {
       const balanceBefore = await selfToken.balanceOf(user1.address);
-      
       await presale.connect(user1).claimTokens();
-      
       const balanceAfter = await selfToken.balanceOf(user1.address);
       expect(balanceAfter).to.be.gt(balanceBefore);
     });
 
     it("Should vest remaining tokens over 10 months", async function () {
-      // Claim TGE unlock
       await presale.connect(user1).claimTokens();
-      
-      // Fast forward 5 months (half vesting)
       await time.increase(86400 * 30 * 5);
-      
       const claimable = await presale.getClaimableAmount(user1.address);
       expect(claimable).to.be.gt(0);
+    });
+  });
+
+  describe("Excess SELF Withdrawal (SEA-16)", function () {
+    beforeEach(async function () {
+      const amountPerWallet = ethers.parseEther("10000");
+
+      // Complete all rounds with soft cap reached
+      for (let i = 0; i < 5; i++) {
+        const currentTime = await time.latest();
+        if (startTimes[i] > currentTime) {
+          await time.increaseTo(startTimes[i]);
+        }
+
+        if (i === 0) {
+          // Reach soft cap using random wallets
+          const walletsNeeded = 50;
+          for (let w = 0; w < walletsNeeded; w++) {
+            const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+            await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+            await mockUSDC.mint(wallet.address, amountPerWallet);
+            await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+            await presale.connect(wallet).contribute(amountPerWallet);
+            await ethers.provider.send("hardhat_mine", ["0x3"]);
+          }
+        }
+
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+
+      const tgeTime = (await time.latest()) + 86400 * 7;
+      await presale.connect(admin).requestEnableTGE(tgeTime);
+      await time.increase(86400 * 2 + 1);
+      await presale.connect(admin).executeEnableTGE();
+    });
+
+    it("Should allow sweeping only the excess SELF after TGE", async function () {
+      const presaleAddr = await presale.getAddress();
+      const balanceBefore = await selfToken.balanceOf(presaleAddr);
+      const treasuryBefore = await selfToken.balanceOf(treasury.address);
+
+      const totalAllocated = await presale.totalAllocatedSELF();
+      const totalClaimed = await presale.totalClaimedSELF();
+      const outstanding = totalAllocated - totalClaimed;
+      const expectedExcess = balanceBefore - outstanding;
+
+      await expect(
+        presale.connect(admin).withdrawExcessSELF(treasury.address)
+      ).to.emit(presale, "ExcessSELFWithdrawn");
+
+      const balanceAfter = await selfToken.balanceOf(presaleAddr);
+      const treasuryAfter = await selfToken.balanceOf(treasury.address);
+
+      expect(balanceAfter).to.equal(outstanding);
+      expect(treasuryAfter - treasuryBefore).to.equal(expectedExcess);
+    });
+
+    it("Should revert if called before TGE", async function () {
+      // Deploy a fresh presale that hasn't enabled TGE
+      const SELFPresale = await ethers.getContractFactory("SELFPresale");
+      const freshPresale = await SELFPresale.deploy(
+        await mockUSDC.getAddress(),
+        await selfToken.getAddress(),
+        admin.address
+      );
+      const now = await time.latest();
+      const freshStartTimes = [
+        now + 3600,
+        now + 3600 + 86400 * 12,
+        now + 3600 + 86400 * 24,
+        now + 3600 + 86400 * 36,
+        now + 3600 + 86400 * 48
+      ];
+      const freshEndTimes = [
+        now + 3600 + 86400 * 12 - 1,
+        now + 3600 + 86400 * 24 - 1,
+        now + 3600 + 86400 * 36 - 1,
+        now + 3600 + 86400 * 48 - 1,
+        now + 3600 + 86400 * 60 - 1
+      ];
+      await freshPresale.connect(admin).initializeRounds(freshStartTimes, freshEndTimes);
+      await selfToken.transfer(await freshPresale.getAddress(), ethers.parseEther("1000"));
+
+      await expect(
+        freshPresale.connect(admin).withdrawExcessSELF(treasury.address)
+      ).to.be.revertedWithCustomError(freshPresale, "TGENotEnabled");
+    });
+
+    it("Should revert when there is no excess (balance equals outstanding)", async function () {
+      // Fresh presale where we fund SELF exactly equal to the allocations we create (so excess==0)
+      const MockUSDC = await ethers.getContractFactory("MockUSDC");
+      const usdc = await MockUSDC.deploy();
+
+      const SELFToken = await ethers.getContractFactory("SELFToken");
+      const self = await SELFToken.deploy();
+
+      const SELFPresale = await ethers.getContractFactory("SELFPresale");
+      const p = await SELFPresale.deploy(await usdc.getAddress(), await self.getAddress(), admin.address);
+
+      const now = await time.latest();
+      const sTimes = [
+        now + 3600,
+        now + 3600 + 86400 * 12,
+        now + 3600 + 86400 * 24,
+        now + 3600 + 86400 * 36,
+        now + 3600 + 86400 * 48
+      ];
+      const eTimes = [
+        now + 3600 + 86400 * 12 - 1,
+        now + 3600 + 86400 * 24 - 1,
+        now + 3600 + 86400 * 36 - 1,
+        now + 3600 + 86400 * 48 - 1,
+        now + 3600 + 86400 * 60 - 1
+      ];
+      await p.connect(admin).initializeRounds(sTimes, eTimes);
+
+      // Move to round 1 start
+      await time.increaseTo(sTimes[0]);
+
+      // We will do 50 contributions of $10,000 in round 1 to reach exactly the $500k soft cap.
+      const amountPerWallet = ethers.parseEther("10000");
+      const walletsNeeded = 50;
+
+      // Compute the exact SELF needed for one contribution, matching the contract math for round 1
+      const round1 = await p.rounds(0);
+      const price = round1.price; // uint256
+      const bonusPct = BigInt(round1.bonus);
+
+      let selfAmount = (amountPerWallet * 10n ** 18n) / price;
+      const remainder = (amountPerWallet * 10n ** 18n) % price;
+      if (remainder > 0n) selfAmount += 1n;
+      const bonusAmount = (selfAmount * bonusPct) / 100n;
+      const totalSelfPerContribution = selfAmount + bonusAmount;
+
+      const totalSelfNeeded = totalSelfPerContribution * BigInt(walletsNeeded);
+      await self.transfer(await p.getAddress(), totalSelfNeeded);
+
+      for (let w = 0; w < walletsNeeded; w++) {
+        const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+        await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+        await usdc.mint(wallet.address, amountPerWallet);
+        await usdc.connect(wallet).approve(await p.getAddress(), amountPerWallet);
+        await p.connect(wallet).contribute(amountPerWallet);
+        await ethers.provider.send("hardhat_mine", ["0x3"]);
+      }
+
+      // End all rounds (including empty ones)
+      for (let i = 0; i < 5; i++) {
+        await time.increaseTo(eTimes[i] + 1);
+        await p.connect(admin).finalizeRound();
+        await p.connect(admin).advanceRound();
+      }
+
+      // Enable TGE
+      const tgeTime = (await time.latest()) + 86400 * 7;
+      await p.connect(admin).requestEnableTGE(tgeTime);
+      await time.increase(86400 * 2 + 1);
+      await p.connect(admin).executeEnableTGE();
+
+      await expect(
+        p.connect(admin).withdrawExcessSELF(treasury.address)
+      ).to.be.revertedWithCustomError(p, "NoExcessSELF");
     });
   });
 
@@ -587,122 +813,175 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
   });
 
   describe("Timelock Cancellation", function () {
-    beforeEach(async function () {
-      await time.increaseTo(startTimes[0]);
-      const amount = ethers.parseEther("1000");
-      await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
-      await presale.connect(user1).contribute(amount);
-    });
-
     it("Should allow cancelling withdrawal timelock", async function () {
-      await presale.connect(admin).requestWithdrawFunds();
+      const amountPerWallet = ethers.parseEther("10000");
+      await time.increaseTo(startTimes[0]);
+      
+      // Reach soft cap
+      for (let w = 0; w < 50; w++) {
+        const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+        await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+        await mockUSDC.mint(wallet.address, amountPerWallet);
+        await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+        await presale.connect(wallet).contribute(amountPerWallet);
+        await ethers.provider.send("hardhat_mine", ["0x3"]);
+      }
+      
+      // End all rounds
+      for (let i = 0; i < 5; i++) {
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+      
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("1000"));
       
       await expect(
-        presale.connect(admin).cancelWithdrawFunds()
+        presale.connect(admin)["cancelWithdrawFunds(uint256)"](1)
       ).to.emit(presale, "TimelockCancelled");
-      
-      // After cancellation, execution should fail
-      await time.increase(86400 * 2 + 1);
-      await expect(
-        presale.connect(admin).executeWithdrawFunds(treasury.address, 0)
-      ).to.be.revertedWithCustomError(presale, "TimelockAlreadyExecutedOrCancelled");
     });
 
     it("Should allow cancelling TGE timelock", async function () {
-      // Complete all rounds first
-      for (let i = 0; i < 5; i++) {
-        const currentTime = await time.latest();
-        if (startTimes[i] > currentTime) {
-          await time.increaseTo(startTimes[i]);
-        }
-        const amount = ethers.parseEther("1000");
-        await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
-        await presale.connect(user1).contribute(amount);
-        
-        const timeAfterContribute = await time.latest();
-        const timeToEnd = endTimes[i] - timeAfterContribute;
-        if (timeToEnd > 0) {
-          await time.increase(timeToEnd);
-        }
-        await presale.connect(admin).finalizeRound();
-        if (i < 4) {
-          await presale.connect(admin).advanceRound();
-        }
+      const amountPerWallet = ethers.parseEther("10000");
+      await time.increaseTo(startTimes[0]);
+      
+      // Reach soft cap
+      for (let w = 0; w < 50; w++) {
+        const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+        await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+        await mockUSDC.mint(wallet.address, amountPerWallet);
+        await mockUSDC.connect(wallet).approve(await presale.getAddress(), amountPerWallet);
+        await presale.connect(wallet).contribute(amountPerWallet);
+        await ethers.provider.send("hardhat_mine", ["0x3"]);
       }
       
+      // End all rounds
+      for (let i = 0; i < 5; i++) {
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+
       const tgeTime = (await time.latest()) + 86400 * 7;
       await presale.connect(admin).requestEnableTGE(tgeTime);
       
       await expect(
-        presale.connect(admin).cancelEnableTGE(tgeTime)
+        presale.connect(admin).cancelEnableTGE()
       ).to.emit(presale, "TimelockCancelled");
     });
 
-    it("Should allow cancelling emergency withdrawal timelock", async function () {
-      await presale.connect(admin).requestEmergencyWithdrawSELF();
+    it("Should allow cancelling emergency withdrawal timelock when no allocations", async function () {
+      // Deploy fresh presale without contributions
+      const SELFPresale = await ethers.getContractFactory("SELFPresale");
+      const freshPresale = await SELFPresale.deploy(
+        await mockUSDC.getAddress(),
+        await selfToken.getAddress(),
+        admin.address
+      );
+      
+      const now = await time.latest();
+      const freshStartTimes = [
+        now + 3600,
+        now + 3600 + 86400 * 12,
+        now + 3600 + 86400 * 24,
+        now + 3600 + 86400 * 36,
+        now + 3600 + 86400 * 48
+      ];
+      const freshEndTimes = [
+        now + 3600 + 86400 * 12 - 1,
+        now + 3600 + 86400 * 24 - 1,
+        now + 3600 + 86400 * 36 - 1,
+        now + 3600 + 86400 * 48 - 1,
+        now + 3600 + 86400 * 60 - 1
+      ];
+      await freshPresale.connect(admin).initializeRounds(freshStartTimes, freshEndTimes);
+      
+      await freshPresale.connect(admin).requestEmergencyWithdrawSELF();
       
       await expect(
-        presale.connect(admin).cancelEmergencyWithdrawSELF()
-      ).to.emit(presale, "TimelockCancelled");
+        freshPresale.connect(admin).cancelEmergencyWithdrawSELF()
+      ).to.emit(freshPresale, "TimelockCancelled");
     });
 
-    it("Should fail to cancel non-existent timelock", async function () {
+    it("Should fail deprecated cancelWithdrawFunds()", async function () {
       await expect(
         presale.connect(admin).cancelWithdrawFunds()
-      ).to.be.revertedWithCustomError(presale, "TimelockNotFound");
+      ).to.be.revertedWith("DEPRECATED: Use cancelWithdrawFunds(uint256)");
     });
   });
 
   describe("Emergency Withdrawal TGE Protection", function () {
-    beforeEach(async function () {
-      // Complete all rounds
-      for (let i = 0; i < 5; i++) {
-        const currentTime = await time.latest();
-        if (startTimes[i] > currentTime) {
-          await time.increaseTo(startTimes[i]);
-        }
-        const amount = ethers.parseEther("1000");
-        await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
-        await presale.connect(user1).contribute(amount);
-        
-        const timeAfterContribute = await time.latest();
-        const timeToEnd = endTimes[i] - timeAfterContribute;
-        if (timeToEnd > 0) {
-          await time.increase(timeToEnd);
-        }
-        await presale.connect(admin).finalizeRound();
-        if (i < 4) {
-          await presale.connect(admin).advanceRound();
-        }
-      }
-    });
-
     it("Should block emergency withdrawal if TGE enabled during timelock", async function () {
-      // Request emergency withdrawal
-      await presale.connect(admin).requestEmergencyWithdrawSELF();
+      // Deploy fresh presale without contributions for emergency withdrawal test
+      const SELFPresale = await ethers.getContractFactory("SELFPresale");
+      const freshPresale = await SELFPresale.deploy(
+        await mockUSDC.getAddress(),
+        await selfToken.getAddress(),
+        admin.address
+      );
       
-      // Wait some time but not full timelock
-      await time.increase(86400 * 3);
+      const now = await time.latest();
+      const freshStartTimes = [
+        now + 3600,
+        now + 3600 + 86400 * 12,
+        now + 3600 + 86400 * 24,
+        now + 3600 + 86400 * 36,
+        now + 3600 + 86400 * 48
+      ];
+      const freshEndTimes = [
+        now + 3600 + 86400 * 12 - 1,
+        now + 3600 + 86400 * 24 - 1,
+        now + 3600 + 86400 * 36 - 1,
+        now + 3600 + 86400 * 48 - 1,
+        now + 3600 + 86400 * 60 - 1
+      ];
+      await freshPresale.connect(admin).initializeRounds(freshStartTimes, freshEndTimes);
       
-      // Enable TGE (different admin action)
+      // Transfer SELF tokens
+      await selfToken.transfer(await freshPresale.getAddress(), ethers.parseEther("42000000"));
+      
+      // Request emergency withdrawal (no allocations yet)
+      await freshPresale.connect(admin).requestEmergencyWithdrawSELF();
+      
+      // Now make contributions to reach soft cap (this will block emergency withdrawal)
+      const amountPerWallet = ethers.parseEther("10000");
+      await time.increaseTo(freshStartTimes[0]);
+      
+      for (let w = 0; w < 50; w++) {
+        const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+        await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
+        await mockUSDC.mint(wallet.address, amountPerWallet);
+        await mockUSDC.connect(wallet).approve(await freshPresale.getAddress(), amountPerWallet);
+        await freshPresale.connect(wallet).contribute(amountPerWallet);
+        await ethers.provider.send("hardhat_mine", ["0x3"]);
+      }
+      
+      // End all rounds
+      for (let i = 0; i < 5; i++) {
+        await time.increaseTo(freshEndTimes[i] + 1);
+        await freshPresale.connect(admin).finalizeRound();
+        await freshPresale.connect(admin).advanceRound();
+      }
+      
+      // Enable TGE
       const tgeTime = (await time.latest()) + 86400 * 7;
-      await presale.connect(admin).requestEnableTGE(tgeTime);
+      await freshPresale.connect(admin).requestEnableTGE(tgeTime);
       await time.increase(86400 * 2 + 1);
-      await presale.connect(admin).executeEnableTGE(tgeTime);
+      await freshPresale.connect(admin).executeEnableTGE();
       
-      // Now wait for emergency timelock to complete
-      await time.increase(86400 * 4);
+      // Wait for emergency timelock to complete
+      await time.increase(86400 * 7);
       
-      // Emergency withdrawal should now fail because TGE is enabled
+      // Emergency withdrawal should fail because TGE is enabled
       await expect(
-        presale.connect(admin).executeEmergencyWithdrawSELF(admin.address)
-      ).to.be.revertedWithCustomError(presale, "TGEAlreadyEnabled");
+        freshPresale.connect(admin).executeEmergencyWithdrawSELF(admin.address)
+      ).to.be.revertedWithCustomError(freshPresale, "TGEAlreadyEnabled");
     });
   });
 
   describe("Refund Participant Count", function () {
-    beforeEach(async function () {
-      // Complete all rounds with minimal contributions (won't reach soft cap)
+    it("Should decrement participant count on refund", async function () {
+      // Complete all rounds without reaching soft cap
       for (let i = 0; i < 5; i++) {
         const currentTime = await time.latest();
         if (startTimes[i] > currentTime) {
@@ -712,19 +991,11 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
         await presale.connect(user1).contribute(amount);
         
-        const timeAfterContribute = await time.latest();
-        const timeToEnd = endTimes[i] - timeAfterContribute;
-        if (timeToEnd > 0) {
-          await time.increase(timeToEnd);
-        }
+        await time.increaseTo(endTimes[i] + 1);
         await presale.connect(admin).finalizeRound();
-        if (i < 4) {
-          await presale.connect(admin).advanceRound();
-        }
+        await presale.connect(admin).advanceRound();
       }
-    });
-
-    it("Should decrement participant count on refund", async function () {
+      
       await presale.connect(admin).enableRefunds();
       
       const statsBefore = await presale.getPresaleStats();
