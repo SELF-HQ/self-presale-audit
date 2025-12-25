@@ -902,12 +902,6 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         freshPresale.connect(admin).cancelEmergencyWithdrawSELF()
       ).to.emit(freshPresale, "TimelockCancelled");
     });
-
-    it("Should fail deprecated cancelWithdrawFunds()", async function () {
-      await expect(
-        presale.connect(admin).cancelWithdrawFunds()
-      ).to.be.revertedWith("DEPRECATED: Use cancelWithdrawFunds(uint256)");
-    });
   });
 
   describe("Emergency Withdrawal TGE Protection", function () {

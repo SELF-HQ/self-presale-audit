@@ -713,27 +713,6 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         
         return totalUnlocked - userContrib.claimed;
     }
-    
-    /**
-     * @notice Deprecated: Use requestWithdrawFunds(address,uint256) instead
-     * @dev Kept for interface compatibility - always reverts
-     */
-    function requestWithdrawFunds() external onlyRole(TREASURY_ROLE) {
-        revert("DEPRECATED: Use requestWithdrawFunds(address,uint256)");
-    }
-    
-    /**
-     * @notice Deprecated: Use executeWithdrawFunds(uint256) instead
-     * @dev Kept for interface compatibility - always reverts
-     * @param treasury Unused - kept for signature compatibility
-     * @param amount Unused - kept for signature compatibility
-     */
-    function executeWithdrawFunds(address treasury, uint256 amount) external onlyRole(TREASURY_ROLE) {
-        // Silence unused parameter warnings
-        treasury;
-        amount;
-        revert("DEPRECATED: Use executeWithdrawFunds(uint256)");
-    }
 
     /**
      * @notice Request withdraw raised USDC with timelock (supports multiple concurrent requests)
@@ -904,14 +883,6 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     }
     
     /**
-     * @notice Deprecated: Use cancelWithdrawFunds(uint256) instead
-     * @dev Kept for interface compatibility - always reverts
-     */
-    function cancelWithdrawFunds() external onlyRole(TREASURY_ROLE) {
-        revert("DEPRECATED: Use cancelWithdrawFunds(uint256)");
-    }
-    
-    /**
      * @notice Cancel a pending TGE enablement timelock request
      * @dev Allows TGE enabler to cancel a pending TGE request
      */
@@ -1010,6 +981,35 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             userContrib.claimed,
             getClaimableAmount(user)
         );
+    }
+    
+    /**
+     * @notice Get excess SELF balance available for withdrawal
+     * @dev Returns the amount of SELF tokens that exceed outstanding user claims
+     * @dev Returns 0 if balance is insufficient or TGE not enabled
+     * @return excess Amount of excess SELF tokens that can be withdrawn
+     * @return balance Current SELF balance in contract
+     * @return outstanding Outstanding SELF claims (allocated but not yet claimed)
+     * 
+     * This function enables external monitoring and verification of:
+     * - Real-time solvency status
+     * - Legitimacy of excess withdrawals
+     * - Token reserve transparency
+     */
+    function getExcessSELFBalance() external view returns (
+        uint256 excess,
+        uint256 balance,
+        uint256 outstanding
+    ) {
+        balance = SELF.balanceOf(address(this));
+        outstanding = totalAllocatedSELF - totalClaimedSELF;
+        
+        // Only calculate excess if TGE is enabled (when withdrawals are allowed)
+        if (tgeEnabled && balance >= outstanding) {
+            excess = balance - outstanding;
+        } else {
+            excess = 0;
+        }
     }
     
     /**

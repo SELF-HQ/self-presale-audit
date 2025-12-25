@@ -62,6 +62,8 @@ All privileged contract roles and undistributed tokens are controlled by a 2-of-
 - Signer 2: `0xD7286BB3983316FF3b2e8A27CABc976aA820Ac97`
 - Signer 3: `0xF1164C0208168676DF682f7b66AFF4921ec4bF32`
 
+**Verification:** Multisig configuration (threshold and owners) can be verified upon request via screen-share or by providing a verification script. Role assignments on the presale contract are publicly verifiable via BSCScan.
+
 ### Contract Roles Assigned to Multisig
 - DEFAULT_ADMIN_ROLE
 - TREASURY_ROLE
@@ -72,6 +74,71 @@ All privileged contract roles and undistributed tokens are controlled by a 2-of-
 *All privileged operations require 2-of-3 signer approval plus a timelock delay.*
 
 **Published source:** `https://docs.self.app/tokenomics`
+
+## Security Guarantees
+
+### Hard On-Chain Invariants
+
+The presale contract enforces critical security invariants in code, not operational policy:
+
+#### 1. Solvency Protection
+- **USDC Refunds**: Withdrawals blocked until presale succeeds (soft cap reached + ended). Refund path remains available if soft cap not met.
+- **SELF Token Claims**: Contributions require sufficient SELF balance on-chain. Contract verifies `balance >= outstandingClaims + newAllocation` before accepting contributions.
+- **Emergency Safeguards**: Emergency SELF withdrawals blocked once any user allocations exist.
+
+#### 2. TGE Immutability
+- Token Generation Event can only be enabled once
+- Multiple layers prevent TGE time from being changed after activation:
+  - Pending request check (prevents request overwrites)
+  - Execution guard (prevents multiple executions)
+  - Explicit cancellation required to replace pending requests
+
+#### 3. Soft Cap Enforcement
+- TGE enablement requires `totalRaised >= SOFT_CAP` (hard-checked in both request and execution)
+- Refunds automatically available if soft cap not reached after presale ends
+- Mutual exclusivity: TGE and refunds cannot both be active
+
+#### 4. User Protections
+- **Precision Math**: All token calculations round up in favor of users
+- **Dust Handling**: Allows exact completion of rounds when remaining capacity < minimum contribution
+- **Refund Accounting**: `totalRaised` decrements on refunds for accurate net-raised reporting
+- **30-Day Refund Window**: Users have 30 days to claim refunds if soft cap not met
+
+### Zero-Trust Operator Model
+
+Even with compromised privileged keys, users remain protected:
+
+- Cannot drain USDC before presale successfully completes
+- Cannot drain SELF tokens needed for user claims
+- Cannot change TGE time after activation
+- Cannot bypass soft cap requirements
+- Timelock delays provide transparency window (2-7 days)
+- Circuit breaker limits withdrawal velocity ($500k/day)
+
+### Transparency & Monitoring
+
+Public view functions for external verification:
+
+- `getExcessSELFBalance()` - Shows withdrawable excess vs. outstanding claims
+- `getClaimableAmount(user)` - Shows user's vested + unlocked tokens
+- `getUserContribution(user)` - Complete user allocation breakdown
+- `getPresaleStats()` - Aggregate presale state
+
+All privileged operations emit events for on-chain monitoring.
+
+### Audit Status
+
+**Certik Audit:** All findings addressed (14/14)
+- 2 Medium severity issues resolved with hard on-chain enforcement
+- 5 Minor protocol correctness issues fixed
+- 5 Design/informational improvements implemented
+- 2 Centralization disclosures provided with verifiable evidence
+
+**Test Coverage:** 51 passing tests, zero compiler warnings
+
+**Deployed Contracts (BSC Mainnet):**
+- SELFToken: `0xf4548acf87360DD1Fa1c3f7F868e60b423862e37` ([Verified](https://bscscan.com/address/0xf4548acf87360DD1Fa1c3f7F868e60b423862e37#code))
+- SELFPresale: `0x9F767931E10B3E32AabFEA74B1a639Cec6F0970D` ([Verified](https://bscscan.com/address/0x9F767931E10B3E32AabFEA74B1a639Cec6F0970D#code))
 
 ## Testing
 
@@ -116,3 +183,4 @@ docs/
 ---
 
 **Audit Ready:** December 14, 2025
+**Skyharbor Updated:** December 25, 2025

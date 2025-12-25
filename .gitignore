@@ -13,6 +13,7 @@ typechain-types/
 .env
 .env.local
 .env.*.local
+.env.example
 
 # IDE
 .vscode/
@@ -59,3 +60,4 @@ plan.md
 response.md
 updates.md
 node_modules
+paste.md

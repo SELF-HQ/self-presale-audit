@@ -5,21 +5,22 @@ async function main() {
   
   const SELFToken = await hre.ethers.getContractFactory("SELFToken");
   const selfToken = await SELFToken.deploy();
-  await selfToken.deployed();
+  await selfToken.waitForDeployment();
   
-  console.log("✅ SELFToken deployed to:", selfToken.address);
+  const tokenAddress = await selfToken.getAddress();
+  console.log("✅ SELFToken deployed to:", tokenAddress);
   console.log("   Total Supply: 500,000,000 SELF");
   
-  // Wait for block confirmations
   console.log("\nWaiting for block confirmations...");
-  await selfToken.deployTransaction.wait(5);
+  const deployTx = selfToken.deploymentTransaction();
+  await deployTx.wait(5);
   
-  // Verify on BscScan
   console.log("\nVerifying contract on BscScan...");
   try {
     await hre.run("verify:verify", {
-      address: selfToken.address,
-      constructorArguments: []
+      address: tokenAddress,
+      constructorArguments: [],
+      contract: "contracts/SELFToken.sol:SELFToken"
     });
     console.log("✅ Contract verified on BscScan");
   } catch (error) {
@@ -27,7 +28,7 @@ async function main() {
   }
   
   console.log("\n=== Deployment Complete ===");
-  console.log("SELF Token Address:", selfToken.address);
+  console.log("SELF Token Address:", tokenAddress);
   console.log("\nSave this address for presale deployment!");
 }
 
@@ -37,4 +38,3 @@ main()
     console.error(error);
     process.exit(1);
   });
-
