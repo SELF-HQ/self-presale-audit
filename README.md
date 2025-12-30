@@ -49,6 +49,23 @@ uint256 constant MAX_CONTRIBUTION = 10_000 * 1e18;   // $10,000
 uint256 constant SOFT_CAP = 500_000 * 1e18;          // $500k
 uint256 constant HARD_CAP = 2_500_000 * 1e18;        // $2.5M
 ```
+
+## Token Distribution & Allocation
+
+### SELF Token Supply
+**Total Supply:** 500,000,000 SELF (fixed, non-mintable)
+
+**Initial Distribution:**
+- All tokens minted to multisig wallet: `0x34747FFFB47e07025b38bB7e06D92FABbc81cC20`
+- Presale allocation transferred to presale contract: sufficient for all potential claims
+- Remaining tokens retained by multisig for ecosystem development
+
+**Security Measures (SEA-01):**
+- 2-of-3 multisig controls all undistributed tokens
+- Private key security managed via hardware wallets and geographic distribution
+- Full token allocation published at: `https://docs.self.app/tokenomics`
+- Team committed to implementing vesting schedules for non-presale allocations
+
 ## Governance & Security
 
 ### Multisig Wallet
@@ -72,6 +89,30 @@ All privileged contract roles and undistributed tokens are controlled by a 2-of-
 - PAUSER_ROLE
 
 *All privileged operations require 2-of-3 signer approval plus a timelock delay.*
+
+### Timelock Operations (SEA-02)
+
+All critical operations enforce mandatory timelock delays for community transparency:
+
+| Operation | Timelock | Role Required | Guardrails |
+|-----------|----------|---------------|-------------|
+| Enable TGE | 2 days | TGE_ENABLER_ROLE | Requires soft cap reached, all rounds finalized |
+| Withdraw USDC | 2 days | TREASURY_ROLE | Circuit breaker: $500k daily limit |
+| Emergency SELF Withdrawal | 7 days | DEFAULT_ADMIN_ROLE | Blocked if any user allocations exist |
+| Update Rate Limit | None | DEFAULT_ADMIN_ROLE | Bounded: $100 - $1M range |
+| Pause/Unpause | None | PAUSER_ROLE | Emergency circuit breaker only |
+
+**Monitoring Events:**
+- `TimelockRequested(action, executionTime)` - Initiates countdown
+- `TimelockExecuted(action)` - Confirms execution after delay
+- `TimelockCancelled(action)` - Operation cancelled before execution
+
+All events are publicly visible on BSCScan for community monitoring.
+
+**Centralization Mitigation:**
+- Short-term: Timelock + multisig combination (implemented)
+- Long-term: DAO governance transition planned post-launch
+- Permanent: Critical user protections enforced on-chain (solvency, soft cap)
 
 **Published source:** `https://docs.self.app/tokenomics`
 
@@ -134,6 +175,26 @@ All privileged operations emit events for on-chain monitoring.
 - 5 Design/informational improvements implemented
 - 2 Centralization disclosures provided with verifiable evidence
 
+**Centralization Findings:**
+- **SEA-01**: Initial token distribution controlled by multisig - addressed via 2-of-3 Safe, published allocation, hardware wallet key management
+- **SEA-02**: Privileged roles - mitigated via timelock delays (2-7 days), circuit breakers, multisig, and on-chain invariants
+
+**Unsold Token Recovery (SEA-16):**
+
+The contract implements comprehensive protection against locked tokens in both success and failure scenarios:
+
+**Success Path (Soft Cap Reached):**
+- `withdrawExcessSELF()` allows treasury to reclaim unsold tokens after TGE
+- Protected: Cannot withdraw tokens needed for outstanding user claims
+- Formula: `excess = balance - (totalAllocated - totalClaimed)`
+
+**Failure Path (Soft Cap Not Reached):**
+- `enableRefunds()` allows users to claim full USDC refunds
+- `recoverUnclaimedRefunds()` recovers USDC after 30-day window expires
+- `executeEmergencyWithdrawSELF()` recovers all SELF tokens (7-day timelock)
+
+**Mutual Exclusivity:** `tgeEnabled` and `refundEnabled` cannot both be true, ensuring tokens are never permanently locked. The `withdrawExcessSELF` function correctly blocks withdrawals when refunds are active, as SELF tokens must remain available for the alternative recovery path.
+
 **Test Coverage:** 51 passing tests, zero compiler warnings
 
 **Deployed Contracts (BSC Mainnet):**
@@ -183,4 +244,5 @@ docs/
 ---
 
 **Audit Ready:** December 14, 2025
-**Skyharbor Updated:** December 25, 2025
+**Skyharbor Updated V1.1:** December 25, 2025
+**Skyharbor Updated V1.2:** December 30, 2025
