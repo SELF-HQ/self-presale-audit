@@ -192,14 +192,15 @@ The contract implements comprehensive protection against locked tokens in both s
 - `enableRefunds()` allows users to claim full USDC refunds
 - `recoverUnclaimedRefunds()` recovers USDC after 30-day window expires
 - `executeEmergencyWithdrawSELF()` recovers all SELF tokens (7-day timelock)
+  - After refund deadline expires, SELF recovery is allowed even if allocations remain (users forfeited claims)
 
 **Mutual Exclusivity:** `tgeEnabled` and `refundEnabled` cannot both be true, ensuring tokens are never permanently locked. The `withdrawExcessSELF` function correctly blocks withdrawals when refunds are active, as SELF tokens must remain available for the alternative recovery path.
 
-**Test Coverage:** 51 passing tests, zero compiler warnings
+**Test Coverage:** 53 passing tests, zero compiler warnings
 
 **Deployed Contracts (BSC Mainnet):**
 - SELFToken: `0xf4548acf87360DD1Fa1c3f7F868e60b423862e37` ([Verified](https://bscscan.com/address/0xf4548acf87360DD1Fa1c3f7F868e60b423862e37#code))
-- SELFPresale: `0x9F767931E10B3E32AabFEA74B1a639Cec6F0970D` ([Verified](https://bscscan.com/address/0x9F767931E10B3E32AabFEA74B1a639Cec6F0970D#code))
+- SELFPresale: `0x9364dAfAa74482C9aFef2c361D2C76c827308A08` ([Verified](https://bscscan.com/address/0x9364dAfAa74482C9aFef2c361D2C76c827308A08#code))
 
 ## Testing
 
@@ -246,3 +247,4 @@ docs/
 **Audit Ready:** December 14, 2025
 **Skyharbor Updated V1.1:** December 25, 2025
 **Skyharbor Updated V1.2:** December 30, 2025
+**SEA-16 Fix V1.3:** December 31, 2025

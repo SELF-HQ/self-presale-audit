@@ -824,12 +824,16 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     }
     
     /**
-     * @notice Emergency withdraw SELF tokens (only if presale cancelled)
+     * @notice Emergency withdraw SELF tokens (only if presale cancelled or refund window expired)
      * @dev Can only be called before TGE is enabled with 7-day timelock
+     * @dev After refund deadline, allows recovery even if allocations exist (users forfeited claims)
      */
     function requestEmergencyWithdrawSELF() external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tgeEnabled) revert TGEAlreadyEnabled();
-        if (totalAllocatedSELF > 0) revert InsufficientSELFBalance(); // allocations exist; do not allow draining
+        
+        // Allow if refund window has expired (users forfeited their claims)
+        bool refundWindowExpired = refundEnabled && block.timestamp > refundDeadline;
+        if (totalAllocatedSELF > 0 && !refundWindowExpired) revert InsufficientSELFBalance();
         
         TimelockRequest storage existing = timelockRequests[ACTION_EMERGENCY_WITHDRAW_SELF];
         if (existing.timestamp != 0 && !existing.executed) revert TimelockRequestPending();
@@ -842,12 +846,16 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     /**
      * @notice Execute emergency SELF withdrawal after timelock
      * @dev Includes TGE check to prevent draining tokens after TGE is enabled
+     * @dev After refund deadline, allows recovery even if allocations exist (users forfeited claims)
      */
     function executeEmergencyWithdrawSELF(address recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (recipient == address(0)) revert InvalidAddress();
         // CRITICAL: Prevent emergency withdrawal if TGE was enabled during timelock period
         if (tgeEnabled) revert TGEAlreadyEnabled();
-        if (totalAllocatedSELF > 0) revert InsufficientSELFBalance();
+        
+        // Allow if refund window has expired (users forfeited their claims)
+        bool refundWindowExpired = refundEnabled && block.timestamp > refundDeadline;
+        if (totalAllocatedSELF > 0 && !refundWindowExpired) revert InsufficientSELFBalance();
         
         TimelockRequest storage request = timelockRequests[ACTION_EMERGENCY_WITHDRAW_SELF];
         

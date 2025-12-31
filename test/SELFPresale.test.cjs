@@ -1001,4 +1001,79 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       expect(statsAfter._totalParticipants).to.equal(0);
     });
   });
+
+  describe("Emergency SELF Withdrawal After Refund Deadline (SEA-16)", function () {
+    it("Should allow SELF recovery after refund deadline even with unclaimed allocations", async function () {
+      // Complete all rounds without reaching soft cap
+      for (let i = 0; i < 5; i++) {
+        const currentTime = await time.latest();
+        if (startTimes[i] > currentTime) {
+          await time.increaseTo(startTimes[i]);
+        }
+        const amount = ethers.parseEther("1000");
+        await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
+        await presale.connect(user1).contribute(amount);
+        
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+      
+      // Verify allocations exist
+      const totalAllocated = await presale.totalAllocatedSELF();
+      expect(totalAllocated).to.be.gt(0);
+      
+      // Enable refunds (soft cap not reached)
+      await presale.connect(admin).enableRefunds();
+      
+      // User does NOT claim refund - simulating forgotten/malicious non-claim
+      
+      // Fast forward past 30-day refund window
+      await time.increase(86400 * 30 + 1);
+      
+      // Request emergency SELF withdrawal (should now be allowed after refund deadline)
+      await expect(
+        presale.connect(admin).requestEmergencyWithdrawSELF()
+      ).to.emit(presale, "TimelockRequested");
+      
+      // Wait for 7-day emergency timelock
+      await time.increase(86400 * 7 + 1);
+      
+      // Execute emergency withdrawal
+      const selfBalanceBefore = await selfToken.balanceOf(treasury.address);
+      
+      await expect(
+        presale.connect(admin).executeEmergencyWithdrawSELF(treasury.address)
+      ).to.emit(presale, "EmergencySELFWithdrawn");
+      
+      const selfBalanceAfter = await selfToken.balanceOf(treasury.address);
+      expect(selfBalanceAfter).to.be.gt(selfBalanceBefore);
+    });
+
+    it("Should block SELF recovery before refund deadline even with refunds enabled", async function () {
+      // Complete all rounds without reaching soft cap
+      for (let i = 0; i < 5; i++) {
+        const currentTime = await time.latest();
+        if (startTimes[i] > currentTime) {
+          await time.increaseTo(startTimes[i]);
+        }
+        const amount = ethers.parseEther("1000");
+        await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
+        await presale.connect(user1).contribute(amount);
+        
+        await time.increaseTo(endTimes[i] + 1);
+        await presale.connect(admin).finalizeRound();
+        await presale.connect(admin).advanceRound();
+      }
+      
+      // Enable refunds
+      await presale.connect(admin).enableRefunds();
+      
+      // Try to request emergency withdrawal while refund window still active
+      // Should fail because allocations exist and refund window hasn't expired
+      await expect(
+        presale.connect(admin).requestEmergencyWithdrawSELF()
+      ).to.be.revertedWithCustomError(presale, "InsufficientSELFBalance");
+    });
+  });
 });
