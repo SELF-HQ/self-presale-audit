@@ -142,7 +142,7 @@ The presale contract enforces critical security invariants in code, not operatio
 #### 4. User Protections
 - **Precision Math**: All token calculations round up in favor of users
 - **Dust Handling**: Allows exact completion of rounds when remaining capacity < minimum contribution
-- **Refund Accounting**: `totalRaised` decrements on refunds for accurate net-raised reporting
+- **Refund Accounting**: Both global (`totalRaised`) and per-round (`rounds[i].raised`) amounts decrement on refunds, maintaining accounting consistency
 - **30-Day Refund Window**: Users have 30 days to claim refunds if soft cap not met
 
 ### Zero-Trust Operator Model
@@ -169,11 +169,16 @@ All privileged operations emit events for on-chain monitoring.
 
 ### Audit Status
 
-**Certik Audit:** All findings addressed (14/14)
+**CertiK Audit:** All findings addressed (14/14)
 - 2 Medium severity issues resolved with hard on-chain enforcement
 - 5 Minor protocol correctness issues fixed
 - 5 Design/informational improvements implemented
 - 2 Centralization disclosures provided with verifiable evidence
+
+**Post-Audit Fix (V1.4):** Per-round accounting consistency
+- **Issue**: `claimRefund()` decremented `totalRaised` but did not decrement `rounds[i].raised`, causing per-round statistics to become permanently inflated after refunds
+- **Resolution**: `claimRefund()` now decrements both `totalRaised` and each `rounds[i].raised` using the user's `contributionsByRound` data before clearing it
+- **Invariant Maintained**: `Σ rounds[i].raised == totalRaised` holds true after refunds
 
 **Centralization Findings:**
 - **SEA-01**: Initial token distribution controlled by multisig - addressed via 2-of-3 Safe, published allocation, hardware wallet key management
@@ -200,7 +205,7 @@ The contract implements comprehensive protection against locked tokens in both s
 
 **Deployed Contracts (BSC Mainnet):**
 - SELFToken: `0xf4548acf87360DD1Fa1c3f7F868e60b423862e37` ([Verified](https://bscscan.com/address/0xf4548acf87360DD1Fa1c3f7F868e60b423862e37#code))
-- SELFPresale: `0x9364dAfAa74482C9aFef2c361D2C76c827308A08` ([Verified](https://bscscan.com/address/0x9364dAfAa74482C9aFef2c361D2C76c827308A08#code))
+- SELFPresale: `0x68360D03B9B986846D86818917785ac37B800804` ([Verified](https://bscscan.com/address/0x68360D03B9B986846D86818917785ac37B800804#code))
 
 ## Testing
 
@@ -244,7 +249,8 @@ docs/
 
 ---
 
-**Audit Ready:** December 14, 2025
-**Skyharbor Updated V1.1:** December 25, 2025
-**Skyharbor Updated V1.2:** December 30, 2025
-**SEA-16 Fix V1.3:** December 31, 2025
+**Audit Ready:** December 14, 2025  
+**Skyharbor Updated V1.1:** December 25, 2025  
+**Skyharbor Updated V1.2:** December 30, 2025  
+**SEA-16 Fix V1.3:** December 31, 2025  
+**Per-Round Accounting Fix V1.4:** January 1, 2026

@@ -613,9 +613,14 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             totalParticipants--;
         }
         
-        // Clear contributionsByRound mapping for consistency
+        // Update per-round raised amounts and clear user's contributionsByRound
         for (uint256 i = 0; i < 5; i++) {
-            contributionsByRound[msg.sender][i] = 0;
+            uint256 roundAmount = contributionsByRound[msg.sender][i];
+            if (roundAmount > 0) {
+                // Decrement round's raised amount to maintain accounting consistency
+                rounds[i].raised -= roundAmount;
+                contributionsByRound[msg.sender][i] = 0;
+            }
         }
         
         // Transfer USDC back

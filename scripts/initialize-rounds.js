@@ -15,19 +15,19 @@ async function main() {
   // Round dates (Unix timestamps)
   // Feb 1, 2026 00:00 UTC to Mar 12, 2026 23:59 UTC
   const startTimes = [
-    1738368000, // Round 1: Feb 1, 2026
-    1739404800, // Round 2: Feb 13, 2026
-    1740268800, // Round 3: Feb 23, 2026
-    1741132800, // Round 4: Mar 3, 2026
-    1741651200  // Round 5: Mar 9, 2026
+    1769904000, // Round 1: Feb 1, 2026 00:00 UTC
+    1770940800, // Round 2: Feb 13, 2026 00:00 UTC
+    1771804800, // Round 3: Feb 23, 2026 00:00 UTC
+    1772496000, // Round 4: Mar 3, 2026 00:00 UTC
+    1773014400  // Round 5: Mar 9, 2026 00:00 UTC
   ];
   
   const endTimes = [
-    1739404799, // Round 1 ends: Feb 12, 2026 23:59
-    1740268799, // Round 2 ends: Feb 22, 2026 23:59
-    1741132799, // Round 3 ends: Mar 2, 2026 23:59
-    1741651199, // Round 4 ends: Mar 8, 2026 23:59
-    1741910399  // Round 5 ends: Mar 12, 2026 23:59
+    1770940799, // Round 1 ends: Feb 12, 2026 23:59:59 UTC
+    1771804799, // Round 2 ends: Feb 22, 2026 23:59:59 UTC
+    1772495999, // Round 3 ends: Mar 2, 2026 23:59:59 UTC
+    1773014399, // Round 4 ends: Mar 8, 2026 23:59:59 UTC
+    1773359999  // Round 5 ends: Mar 12, 2026 23:59:59 UTC
   ];
   
   console.log("\nRound Schedule:");
