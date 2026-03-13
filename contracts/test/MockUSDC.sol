@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title MockUSDC
- * @notice Mock USDC token for testing (18 decimals like BSC USDC)
+ * @notice Mock USDC token for testing (6 decimals like Base USDC)
  * @dev FOR TESTING ONLY - Do not deploy to mainnet
  * @custom:security This contract has unrestricted minting capabilities.
  *                  It is intended solely for local testing and testnet deployments.
@@ -14,11 +14,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract MockUSDC is ERC20, Ownable {
     constructor() ERC20("Mock USDC", "USDC") {
         // Mint initial supply to deployer for convenience
-        _mint(msg.sender, 1_000_000_000 * 1e18); // 1 billion USDC for testing
+        _mint(msg.sender, 1_000_000_000 * 1e6); // 1 billion USDC for testing
     }
     
     function decimals() public pure override returns (uint8) {
-        return 18;
+        return 6;
     }
     
     /**

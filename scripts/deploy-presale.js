@@ -2,7 +2,7 @@ const hre = require("hardhat");
 
 async function main() {
   // Configuration
-  const USDC_ADDRESS = process.env.USDC_ADDRESS || "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"; // BSC Mainnet USDC
+  const USDC_ADDRESS = process.env.USDC_ADDRESS || "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base Mainnet USDC
   const SELF_TOKEN_ADDRESS = process.env.SELF_TOKEN_ADDRESS;
   const MULTISIG_ADDRESS = process.env.MULTISIG_ADDRESS; // Multi-sig wallet address
   
@@ -17,7 +17,7 @@ async function main() {
   
   const adminAddress = MULTISIG_ADDRESS || (await hre.ethers.getSigners())[0].address;
   
-  console.log("Deploying SELFPresale to BSC...");
+  console.log("Deploying SELFPresale to Base...");
   console.log("USDC Address:", USDC_ADDRESS);
   console.log("SELF Token Address:", SELF_TOKEN_ADDRESS);
   console.log("Admin Address:", adminAddress);
@@ -37,8 +37,8 @@ async function main() {
   console.log("\nWaiting for block confirmations...");
   await presale.deploymentTransaction().wait(5);
   
-  // Verify on BscScan
-  console.log("\nVerifying contract on BscScan...");
+  // Verify on BaseScan
+  console.log("\nVerifying contract on BaseScan...");
   try {
     await hre.run("verify:verify", {
       address: presaleAddress,
@@ -48,7 +48,7 @@ async function main() {
         adminAddress
       ]
     });
-    console.log("✅ Contract verified on BscScan");
+    console.log("✅ Contract verified on BaseScan");
   } catch (error) {
     console.log("⚠️  Verification failed:", error.message);
   }

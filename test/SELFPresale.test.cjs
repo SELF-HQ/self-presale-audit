@@ -2,6 +2,8 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
+const usdc = (n) => ethers.parseUnits(String(n), 6);
+
 describe("SELFPresale - Enhanced Security Test Suite", function () {
   let presale, selfToken, mockUSDC;
   let admin, pauser, roundManager, treasury, tgeEnabler;
@@ -23,7 +25,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     TREASURY_ROLE = ethers.id("TREASURY_ROLE");
     TGE_ENABLER_ROLE = ethers.id("TGE_ENABLER_ROLE");
 
-    // Deploy mock USDC (18 decimals for BSC)
+    // Deploy mock USDC (6 decimals for Base)
     const MockUSDC = await ethers.getContractFactory("MockUSDC");
     mockUSDC = await MockUSDC.deploy();
 
@@ -64,9 +66,9 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     await selfToken.transfer(await presale.getAddress(), presaleAllocation);
 
     // Mint USDC to users
-    await mockUSDC.mint(user1.address, ethers.parseEther("50000"));
-    await mockUSDC.mint(user2.address, ethers.parseEther("50000"));
-    await mockUSDC.mint(user3.address, ethers.parseEther("50000"));
+    await mockUSDC.mint(user1.address, usdc("50000"));
+    await mockUSDC.mint(user2.address, usdc("50000"));
+    await mockUSDC.mint(user3.address, usdc("50000"));
   });
 
   describe("Deployment & Access Control", function () {
@@ -85,8 +87,8 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
     it("Should initialize with correct round parameters", async function () {
       const round1 = await presale.rounds(0);
-      expect(round1.price).to.equal(ethers.parseEther("0.06"));
-      expect(round1.target).to.equal(ethers.parseEther("1500000"));
+      expect(round1.price).to.equal(usdc("0.06"));
+      expect(round1.target).to.equal(usdc("1500000"));
       expect(round1.tgeUnlock).to.equal(50);
       expect(round1.bonus).to.equal(15);
     });
@@ -118,7 +120,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should accept valid contribution", async function () {
-      const amount = ethers.parseEther("1000");
+      const amount = usdc("1000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       
       await expect(presale.connect(user1).contribute(amount))
@@ -129,7 +131,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should calculate correct SELF allocation for Round 1", async function () {
-      const amount = ethers.parseEther("1000");
+      const amount = usdc("1000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       await presale.connect(user1).contribute(amount);
       
@@ -144,7 +146,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should reject contributions below minimum", async function () {
-      const amount = ethers.parseEther("50"); // Below $100
+      const amount = usdc("50"); // Below $100
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       
       await expect(
@@ -153,7 +155,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should reject contributions above maximum", async function () {
-      const amount = ethers.parseEther("11000"); // Above $10k
+      const amount = usdc("11000"); // Above $10k
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       
       await expect(
@@ -163,12 +165,12 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
     it("Should enforce maximum contribution per wallet", async function () {
       // First contribution: $9,000
-      const amount1 = ethers.parseEther("9000");
+      const amount1 = usdc("9000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount1);
       await presale.connect(user1).contribute(amount1);
       
       // Second contribution: $2,000 (total would be $11k)
-      const amount2 = ethers.parseEther("2000");
+      const amount2 = usdc("2000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount2);
       
       await expect(
@@ -183,7 +185,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should block contributions in same block", async function () {
-      const amount = ethers.parseEther("1000");
+      const amount = usdc("1000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount * 2n);
       
       // First contribution
@@ -204,7 +206,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     it("Should reject single contribution exceeding 10% of round", async function () {
       // Round 1 target is $1.5M, 10% = $150k
       // But max contribution per wallet is $10k, so that hits first
-      const amount = ethers.parseEther("10001"); // $10,001
+      const amount = usdc("10001"); // $10,001
       await mockUSDC.mint(user1.address, amount);
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       
@@ -222,7 +224,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     it("Should enforce hourly rate limit", async function () {
       // Default is $100k per hour, but wallet max is $10k total
       // So we test that wallet max is enforced
-      const amount = ethers.parseEther("5000");
+      const amount = usdc("5000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount * 3n);
       
       // Make 2 contributions of $5k each = $10k (reaches wallet limit)
@@ -251,7 +253,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     it("Should reject contributions when paused", async function () {
       await presale.connect(admin).pause();
       
-      const amount = ethers.parseEther("1000");
+      const amount = usdc("1000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       
       await expect(
@@ -274,7 +276,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     it("Should finalize round when target reached", async function () {
       // Need multiple users to reach $1.5M target
       const users = [user1, user2, user3];
-      const amount = ethers.parseEther("10000");
+      const amount = usdc("10000");
       
       for (let i = 0; i < users.length; i++) {
         await mockUSDC.mint(users[i].address, amount);
@@ -311,7 +313,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
   describe("TGE with Timelock", function () {
     beforeEach(async function () {
       // Complete all 5 rounds with soft cap reached
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       
       for (let i = 0; i < 5; i++) {
         const currentTime = await time.latest();
@@ -375,7 +377,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         if (startTimes[i] > currentTime) {
           await time.increaseTo(startTimes[i]);
         }
-        const amount = ethers.parseEther("100");
+        const amount = usdc("100");
         await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
         await presale.connect(user1).contribute(amount);
         
@@ -392,7 +394,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
     it("Should enable refunds if soft cap not reached", async function () {
       const totalRaised = await presale.totalRaised();
-      const softCap = ethers.parseEther("500000");
+      const softCap = usdc("500000");
       expect(totalRaised).to.be.lt(softCap);
       
       await expect(
@@ -417,7 +419,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
   describe("Treasury Withdrawal with Timelock", function () {
     beforeEach(async function () {
       await time.increaseTo(startTimes[0]);
-      const amount = ethers.parseEther("10000");
+      const amount = usdc("10000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       await presale.connect(user1).contribute(amount);
     });
@@ -431,7 +433,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
     it("Should allow withdrawal after presale end + soft cap", async function () {
       // Reach soft cap using random wallets
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
       for (let w = 0; w < walletsNeeded; w++) {
         const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
@@ -452,7 +454,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       }
 
       // Request withdrawal within daily limit ($100k < $500k daily limit)
-      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("100000"));
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, usdc("100000"));
       await time.increase(86400 * 2 + 1);
 
       await expect(
@@ -462,7 +464,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
     it("Should enforce circuit breaker - daily withdrawal limit", async function () {
       // Reach soft cap using random wallets
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
       for (let w = 0; w < walletsNeeded; w++) {
         const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
@@ -483,7 +485,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       }
 
       // Request withdrawal larger than daily limit
-      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("600000"));
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, usdc("600000"));
       await time.increase(86400 * 2 + 1);
 
       await expect(
@@ -493,7 +495,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
     it("Should allow multiple queued withdrawals to execute independently (SEA-10)", async function () {
       // Reach soft cap using random wallets
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
       for (let w = 0; w < walletsNeeded; w++) {
         const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
@@ -516,8 +518,8 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       const treasuryBalBefore = await mockUSDC.balanceOf(treasury.address);
 
       // Queue two withdrawals (two independent timelocks)
-      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("100000")); // nonce 1
-      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("200000")); // nonce 2
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, usdc("100000")); // nonce 1
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, usdc("200000")); // nonce 2
 
       await time.increase(86400 * 2 + 1);
 
@@ -526,7 +528,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       await expect(presale.connect(admin).executeWithdrawFunds(1)).to.emit(presale, "FundsWithdrawn");
 
       const treasuryBalAfter = await mockUSDC.balanceOf(treasury.address);
-      expect(treasuryBalAfter - treasuryBalBefore).to.equal(ethers.parseEther("300000"));
+      expect(treasuryBalAfter - treasuryBalBefore).to.equal(usdc("300000"));
     });
 
     it("Should allow recovery of unclaimed refunds after deadline", async function () {
@@ -537,7 +539,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
           await time.increaseTo(startTimes[i]);
         }
         
-        const amount = ethers.parseEther("500");
+        const amount = usdc("500");
         await mockUSDC.mint(user2.address, amount);
         await mockUSDC.connect(user2).approve(await presale.getAddress(), amount);
         await presale.connect(user2).contribute(amount);
@@ -564,7 +566,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
   describe("Claiming Tokens", function () {
     beforeEach(async function () {
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       
       // Complete all rounds with soft cap reached
       for (let i = 0; i < 5; i++) {
@@ -587,7 +589,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         }
         
         // user1 also contributes for later claiming
-        const amount = ethers.parseEther("1000");
+        const amount = usdc("1000");
         await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
         await presale.connect(user1).contribute(amount);
         
@@ -620,7 +622,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
   describe("Excess SELF Withdrawal (SEA-16)", function () {
     beforeEach(async function () {
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
 
       // Complete all rounds with soft cap reached
       for (let i = 0; i < 5; i++) {
@@ -708,13 +710,13 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     it("Should revert when there is no excess (balance equals outstanding)", async function () {
       // Fresh presale where we fund SELF exactly equal to the allocations we create (so excess==0)
       const MockUSDC = await ethers.getContractFactory("MockUSDC");
-      const usdc = await MockUSDC.deploy();
+      const freshUsdc = await MockUSDC.deploy();
 
       const SELFToken = await ethers.getContractFactory("SELFToken");
       const self = await SELFToken.deploy();
 
       const SELFPresale = await ethers.getContractFactory("SELFPresale");
-      const p = await SELFPresale.deploy(await usdc.getAddress(), await self.getAddress(), admin.address);
+      const p = await SELFPresale.deploy(await freshUsdc.getAddress(), await self.getAddress(), admin.address);
 
       const now = await time.latest();
       const sTimes = [
@@ -737,7 +739,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       await time.increaseTo(sTimes[0]);
 
       // We will do 50 contributions of $10,000 in round 1 to reach exactly the $500k soft cap.
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
 
       // Compute the exact SELF needed for one contribution, matching the contract math for round 1
@@ -757,8 +759,8 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       for (let w = 0; w < walletsNeeded; w++) {
         const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
         await admin.sendTransaction({ to: wallet.address, value: ethers.parseEther("0.1") });
-        await usdc.mint(wallet.address, amountPerWallet);
-        await usdc.connect(wallet).approve(await p.getAddress(), amountPerWallet);
+        await freshUsdc.mint(wallet.address, amountPerWallet);
+        await freshUsdc.connect(wallet).approve(await p.getAddress(), amountPerWallet);
         await p.connect(wallet).contribute(amountPerWallet);
         await ethers.provider.send("hardhat_mine", ["0x3"]);
       }
@@ -795,7 +797,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
     it("Should protect against reentrancy", async function () {
       // ReentrancyGuard is in place, tested implicitly
-      const amount = ethers.parseEther("1000");
+      const amount = usdc("1000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       await presale.connect(user1).contribute(amount);
     });
@@ -803,7 +805,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     it("Should handle exact target contribution", async function () {
       // This would need multiple users and precise amounts
       // Simplified test
-      const amount = ethers.parseEther("1000");
+      const amount = usdc("1000");
       await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
       await presale.connect(user1).contribute(amount);
       
@@ -814,7 +816,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
   describe("Timelock Cancellation", function () {
     it("Should allow cancelling withdrawal timelock", async function () {
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       await time.increaseTo(startTimes[0]);
       
       // Reach soft cap
@@ -834,7 +836,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         await presale.connect(admin).advanceRound();
       }
       
-      await presale.connect(admin).requestWithdrawFunds(treasury.address, ethers.parseEther("1000"));
+      await presale.connect(admin).requestWithdrawFunds(treasury.address, usdc("1000"));
       
       await expect(
         presale.connect(admin)["cancelWithdrawFunds(uint256)"](1)
@@ -842,7 +844,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should allow cancelling TGE timelock", async function () {
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       await time.increaseTo(startTimes[0]);
       
       // Reach soft cap
@@ -938,7 +940,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       await freshPresale.connect(admin).requestEmergencyWithdrawSELF();
       
       // Now make contributions to reach soft cap (this will block emergency withdrawal)
-      const amountPerWallet = ethers.parseEther("10000");
+      const amountPerWallet = usdc("10000");
       await time.increaseTo(freshStartTimes[0]);
       
       for (let w = 0; w < 50; w++) {
@@ -981,7 +983,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         if (startTimes[i] > currentTime) {
           await time.increaseTo(startTimes[i]);
         }
-        const amount = ethers.parseEther("100");
+        const amount = usdc("100");
         await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
         await presale.connect(user1).contribute(amount);
         
@@ -1010,7 +1012,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         if (startTimes[i] > currentTime) {
           await time.increaseTo(startTimes[i]);
         }
-        const amount = ethers.parseEther("1000");
+        const amount = usdc("1000");
         await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
         await presale.connect(user1).contribute(amount);
         
@@ -1057,7 +1059,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         if (startTimes[i] > currentTime) {
           await time.increaseTo(startTimes[i]);
         }
-        const amount = ethers.parseEther("1000");
+        const amount = usdc("1000");
         await mockUSDC.connect(user1).approve(await presale.getAddress(), amount);
         await presale.connect(user1).contribute(amount);
         

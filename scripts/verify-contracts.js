@@ -6,7 +6,7 @@ async function main() {
     presale: process.env.PRESALE_ADDRESS
   };
   
-  console.log("Verifying contracts on BscScan...\n");
+  console.log("Verifying contracts on BaseScan...\n");
   
   // Verify SELF Token
   if (contracts.selfToken) {
@@ -24,7 +24,12 @@ async function main() {
   
   // Verify Presale
   if (contracts.presale && contracts.selfToken) {
-    const USDC_ADDRESS = "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"; // BSC Mainnet
+    const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base Mainnet
+    const MULTISIG_ADDRESS = process.env.MULTISIG_ADDRESS;
+    
+    if (!MULTISIG_ADDRESS) {
+      throw new Error("MULTISIG_ADDRESS environment variable required for presale verification");
+    }
     
     console.log("Verifying SELFPresale:", contracts.presale);
     try {
@@ -32,7 +37,8 @@ async function main() {
         address: contracts.presale,
         constructorArguments: [
           USDC_ADDRESS,
-          contracts.selfToken
+          contracts.selfToken,
+          MULTISIG_ADDRESS
         ]
       });
       console.log("✅ SELFPresale verified\n");

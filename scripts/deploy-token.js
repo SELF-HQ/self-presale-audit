@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("Deploying SELFToken to BSC...");
+  console.log("Deploying SELFToken to Base...");
   
   const SELFToken = await hre.ethers.getContractFactory("SELFToken");
   const selfToken = await SELFToken.deploy();
@@ -15,14 +15,14 @@ async function main() {
   const deployTx = selfToken.deploymentTransaction();
   await deployTx.wait(5);
   
-  console.log("\nVerifying contract on BscScan...");
+  console.log("\nVerifying contract on BaseScan...");
   try {
     await hre.run("verify:verify", {
       address: tokenAddress,
       constructorArguments: [],
       contract: "contracts/SELFToken.sol:SELFToken"
     });
-    console.log("✅ Contract verified on BscScan");
+    console.log("✅ Contract verified on BaseScan");
   } catch (error) {
     console.log("⚠️  Verification failed:", error.message);
   }

@@ -1,6 +1,6 @@
 # SELF Token Presale
 
-Multi-round token presale with integrated vesting on Binance Smart Chain.
+Multi-round token presale with integrated vesting on Base.
 
 ## Audit Scope
 
@@ -23,7 +23,7 @@ contracts/
 - Target raise: $2.5M ($500k soft cap, $2.5M hard cap)
 - Contribution limits: $100 - $10,000 per wallet (cumulative)
 - Vesting: 30-50% TGE unlock + linear 10-month vesting
-- Payment: USDC (Binance-Peg) 18 decimals
+- Payment: USDC (native Circle) 6 decimals
 - OpenZeppelin v4.9.6: AccessControl, ReentrancyGuard, Pausable, SafeERC20
 
 ### Security Features
@@ -37,17 +37,17 @@ contracts/
 - Rate limiting ($100k/hour per wallet)
 - Custom errors (gas optimized)
 
-## BSC USDC Configuration
+## Base USDC Configuration
 
-BSC USDC uses 18 decimals (unlike Ethereum's 6 decimals).
+Base USDC uses 6 decimals (native Circle USDC).
 
-**Contract:** `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`
+**Contract:** `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
 
 ```solidity
-uint256 constant MIN_CONTRIBUTION = 100 * 1e18;      // $100
-uint256 constant MAX_CONTRIBUTION = 10_000 * 1e18;   // $10,000
-uint256 constant SOFT_CAP = 500_000 * 1e18;          // $500k
-uint256 constant HARD_CAP = 2_500_000 * 1e18;        // $2.5M
+uint256 constant MIN_CONTRIBUTION = 100 * 1e6;      // $100
+uint256 constant MAX_CONTRIBUTION = 10_000 * 1e6;   // $10,000
+uint256 constant SOFT_CAP = 500_000 * 1e6;          // $500k
+uint256 constant HARD_CAP = 2_500_000 * 1e6;        // $2.5M
 ```
 
 ## Token Distribution & Allocation
@@ -56,7 +56,7 @@ uint256 constant HARD_CAP = 2_500_000 * 1e18;        // $2.5M
 **Total Supply:** 500,000,000 SELF (fixed, non-mintable)
 
 **Initial Distribution:**
-- All tokens minted to multisig wallet: `0x34747FFFB47e07025b38bB7e06D92FABbc81cC20`
+- All tokens minted to multisig wallet: `0x8b2fE271c13C94c679b1fF69466C2D6d034b2e8c`
 - Presale allocation transferred to presale contract: sufficient for all potential claims
 - Remaining tokens retained by multisig for ecosystem development
 
@@ -72,14 +72,14 @@ uint256 constant HARD_CAP = 2_500_000 * 1e18;        // $2.5M
 
 All privileged contract roles and undistributed tokens are controlled by a 2-of-3 multisig wallet for security.
 
-**Safe Multisig Address:** `0x34747FFFB47e07025b38bB7e06D92FABbc81cC20`
+**Safe Multisig Address:** `0x8b2fE271c13C94c679b1fF69466C2D6d034b2e8c`
 
 **Signers:**
 - Signer 1: `0x0Ef1692fb24e9baFCdF599f72fBe81841E52c349`
 - Signer 2: `0xD7286BB3983316FF3b2e8A27CABc976aA820Ac97`
 - Signer 3: `0xF1164C0208168676DF682f7b66AFF4921ec4bF32`
 
-**Verification:** Multisig configuration (threshold and owners) can be verified upon request via screen-share or by providing a verification script. Role assignments on the presale contract are publicly verifiable via BSCScan.
+**Verification:** Multisig configuration (threshold and owners) can be verified upon request via screen-share or by providing a verification script. Role assignments on the presale contract are publicly verifiable via BaseScan.
 
 ### Contract Roles Assigned to Multisig
 - DEFAULT_ADMIN_ROLE
@@ -107,7 +107,7 @@ All critical operations enforce mandatory timelock delays for community transpar
 - `TimelockExecuted(action)` - Confirms execution after delay
 - `TimelockCancelled(action)` - Operation cancelled before execution
 
-All events are publicly visible on BSCScan for community monitoring.
+All events are publicly visible on BaseScan for community monitoring.
 
 **Centralization Mitigation:**
 - Short-term: Timelock + multisig combination (implemented)
@@ -203,9 +203,9 @@ The contract implements comprehensive protection against locked tokens in both s
 
 **Test Coverage:** 53 passing tests, zero compiler warnings
 
-**Deployed Contracts (BSC Mainnet):**
-- SELFToken: `0xf4548acf87360DD1Fa1c3f7F868e60b423862e37` ([Verified](https://bscscan.com/address/0xf4548acf87360DD1Fa1c3f7F868e60b423862e37#code))
-- SELFPresale: `0x68360D03B9B986846D86818917785ac37B800804` ([Verified](https://bscscan.com/address/0x68360D03B9B986846D86818917785ac37B800804#code))
+**Deployed Contracts (Base Mainnet):**
+- SELFToken: *Pending deployment*
+- SELFPresale: *Pending deployment*
 
 ## Testing
 
@@ -216,7 +216,7 @@ npx hardhat test
 
 Tests cover token functionality, presale logic, vesting, and edge cases.
 
-`contracts/test/MockUSDC.sol` is a test utility only (18-decimal USDC simulator).
+`contracts/test/MockUSDC.sol` is a test utility only (6-decimal USDC simulator).
 
 ## Repository Structure
 
@@ -242,8 +242,8 @@ docs/
 
 ## Deployment
 
-**Network:** Binance Smart Chain (BSC) Mainnet  
-**USDC:** `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`  
+**Network:** Base Mainnet  
+**USDC:** `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`  
 **Compiler:** Solidity 0.8.20  
 **Launch:** February 1, 2026
 
@@ -253,4 +253,5 @@ docs/
 **Skyharbor Updated V1.1:** December 25, 2025  
 **Skyharbor Updated V1.2:** December 30, 2025  
 **SEA-16 Fix V1.3:** December 31, 2025  
-**Per-Round Accounting Fix V1.4:** January 1, 2026
+**Per-Round Accounting Fix V1.4:** January 1, 2026  
+**Base Migration V1.5:** March 13, 2026

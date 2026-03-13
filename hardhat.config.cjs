@@ -16,38 +16,38 @@ module.exports = {
     }
   },
   networks: {
-    bsc: {
-      url: "https://bsc-dataseed.binance.org/",
-      chainId: 56,
+    base: {
+      url: "https://mainnet.base.org",
+      chainId: 8453,
       accounts: process.env.DEPLOYER_PRIVATE_KEY 
         ? [process.env.DEPLOYER_PRIVATE_KEY] 
         : []
     },
-    bscTestnet: {
-      url: "https://data-seed-prebsc-1-s1.binance.org:8545/",
-      chainId: 97,
+    baseSepolia: {
+      url: "https://sepolia.base.org",
+      chainId: 84532,
       accounts: process.env.DEPLOYER_PRIVATE_KEY 
         ? [process.env.DEPLOYER_PRIVATE_KEY] 
         : []
     }
   },
   etherscan: {
-    apiKey: process.env.BSCSCAN_API_KEY || "",
+    apiKey: process.env.BASESCAN_API_KEY || "",
     customChains: [
       {
-        network: "bsc",
-        chainId: 56,
+        network: "base",
+        chainId: 8453,
         urls: {
-          apiURL: "https://api.bscscan.com/api",
-          browserURL: "https://bscscan.com"
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org"
         }
       },
       {
-        network: "bscTestnet",
-        chainId: 97,
+        network: "baseSepolia",
+        chainId: 84532,
         urls: {
-          apiURL: "https://api-testnet.bscscan.com/api",
-          browserURL: "https://testnet.bscscan.com"
+          apiURL: "https://api-sepolia.basescan.org/api",
+          browserURL: "https://sepolia.basescan.org"
         }
       }
     ]

@@ -47,8 +47,8 @@ async function main() {
   // Verify initialization
   console.log("\nVerifying round 1 configuration...");
   const round1 = await presale.rounds(0);
-  console.log("Price:", hre.ethers.utils.formatEther(round1.price), "USDC per SELF ($0.06)");
-  console.log("Target:", hre.ethers.utils.formatEther(round1.target), "USDC");
+  console.log("Price:", hre.ethers.formatUnits(round1.price, 6), "USDC per SELF ($0.06)");
+  console.log("Target:", hre.ethers.formatUnits(round1.target, 6), "USDC");
   console.log("TGE Unlock:", round1.tgeUnlock.toString(), "%");
   console.log("Bonus:", round1.bonus.toString(), "%");
   

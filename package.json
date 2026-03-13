@@ -6,16 +6,16 @@
   "scripts": {
     "test": "hardhat test",
     "compile": "hardhat compile",
-    "deploy:testnet": "hardhat run scripts/deploy-token.js --network bscTestnet && hardhat run scripts/deploy-presale.js --network bscTestnet",
-    "deploy:mainnet": "hardhat run scripts/deploy-token.js --network bsc && hardhat run scripts/deploy-presale.js --network bsc",
-    "verify": "hardhat run scripts/verify-contracts.js --network bsc",
+    "deploy:testnet": "hardhat run scripts/deploy-token.js --network baseSepolia && hardhat run scripts/deploy-presale.js --network baseSepolia",
+    "deploy:mainnet": "hardhat run scripts/deploy-token.js --network base && hardhat run scripts/deploy-presale.js --network base",
+    "verify": "hardhat run scripts/verify-contracts.js --network base",
     "clean": "hardhat clean"
   },
   "keywords": [
     "solidity",
     "ethereum",
     "smart-contracts",
-    "binance-smart-chain",
+    "base",
     "presale",
     "token"
   ],

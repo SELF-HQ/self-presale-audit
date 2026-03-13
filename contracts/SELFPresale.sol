@@ -10,9 +10,9 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 /**
  * @title SELFPresale
  * @author SELF HQ Security Team
- * @notice 5-round presale contract for SELF token on BSC with enterprise-grade security
+ * @notice 5-round presale contract for SELF token on Base with enterprise-grade security
  * @dev Supports multiple rounds with different prices, bonuses, and TGE unlocks
- * @dev IMPORTANT: BSC USDC uses 18 decimals (not 6 like Ethereum USDC)
+ * @dev IMPORTANT: Base USDC uses 6 decimals (native Circle USDC)
  * 
  * Security Features:
  * - Role-based access control (RBAC) with multiple roles
@@ -66,8 +66,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     
     // Round structure
     struct Round {
-        uint256 price;        // Price in USDC (18 decimals) per SELF token (e.g., 6e16 = $0.06)
-        uint256 target;       // Target raise amount in USDC (18 decimals)
+        uint256 price;        // Price in USDC (6 decimals) per SELF token (e.g., 6e4 = $0.06)
+        uint256 target;       // Target raise amount in USDC (6 decimals)
         uint256 raised;       // Amount raised so far
         uint256 startTime;    // Round start timestamp
         uint256 endTime;      // Round end timestamp
@@ -82,11 +82,11 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     bool public roundsInitialized;
     
     // Global constraints
-    uint256 public constant MIN_CONTRIBUTION = 100 * 1e18; // $100 minimum (USDC 18 decimals on BSC)
-    uint256 public constant MAX_CONTRIBUTION = 10_000 * 1e18; // $10,000 maximum per wallet
+    uint256 public constant MIN_CONTRIBUTION = 100 * 1e6; // $100 minimum (USDC 6 decimals on Base)
+    uint256 public constant MAX_CONTRIBUTION = 10_000 * 1e6; // $10,000 maximum per wallet
     uint256 public constant VESTING_DURATION = 10 * 30 days; // 10 months linear vesting
-    uint256 public constant SOFT_CAP = 500_000 * 1e18; // $500k soft cap
-    uint256 public constant HARD_CAP = 2_500_000 * 1e18; // $2.5M hard cap
+    uint256 public constant SOFT_CAP = 500_000 * 1e6; // $500k soft cap
+    uint256 public constant HARD_CAP = 2_500_000 * 1e6; // $2.5M hard cap
     
     // Timelock delays
     uint256 public constant TIMELOCK_WITHDRAW = 2 days;
@@ -94,7 +94,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     uint256 public constant TIMELOCK_EMERGENCY = 7 days;
     
     // Circuit breaker: daily withdrawal limit
-    uint256 public constant DAILY_WITHDRAWAL_LIMIT = 500_000 * 1e18; // $500k per day
+    uint256 public constant DAILY_WITHDRAWAL_LIMIT = 500_000 * 1e6; // $500k per day
     uint256 public lastWithdrawalDay;
     uint256 public withdrawnToday;
     
@@ -147,7 +147,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     uint256 public totalClaimedSELF;   // Total SELF claimed by users
     
     // Rate limiting
-    uint256 public maxContributionPerHour = 100_000 * 1e18; // $100k per hour per wallet
+    uint256 public maxContributionPerHour = 100_000 * 1e6; // $100k per hour per wallet
     mapping(address => mapping(uint256 => uint256)) public contributionsPerHour; // user => hour => amount
     
     // Flash loan protection
@@ -235,7 +235,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     
     /**
      * @notice Constructor
-     * @param _usdc USDC token address on BSC
+     * @param _usdc USDC token address on Base
      * @param _self SELF token address
      * @param _admin Initial admin address (should be multi-sig)
      */
@@ -259,7 +259,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     /**
      * @notice Initialize the 5 rounds with parameters
      * @dev Can only be called once by ROUND_MANAGER
-     * @dev BSC USDC uses 18 decimals (not 6 like Ethereum)
+     * @dev Base USDC uses 6 decimals (native Circle USDC)
      */
     function initializeRounds(
         uint256[5] calldata startTimes,
@@ -280,8 +280,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         
         // Round 1: 6¢, $1.5M target, 50% TGE, 15% bonus
         rounds[0] = Round({
-            price: 6e16,
-            target: 1_500_000 * 1e18,
+            price: 6e4,
+            target: 1_500_000 * 1e6,
             raised: 0,
             startTime: startTimes[0],
             endTime: endTimes[0],
@@ -292,8 +292,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         
         // Round 2: 7¢, $500k target, 45% TGE, 12% bonus
         rounds[1] = Round({
-            price: 7e16,
-            target: 500_000 * 1e18,
+            price: 7e4,
+            target: 500_000 * 1e6,
             raised: 0,
             startTime: startTimes[1],
             endTime: endTimes[1],
@@ -304,8 +304,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         
         // Round 3: 8¢, $250k target, 40% TGE, 9% bonus
         rounds[2] = Round({
-            price: 8e16,
-            target: 250_000 * 1e18,
+            price: 8e4,
+            target: 250_000 * 1e6,
             raised: 0,
             startTime: startTimes[2],
             endTime: endTimes[2],
@@ -316,8 +316,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         
         // Round 4: 9¢, $150k target, 35% TGE, 6% bonus
         rounds[3] = Round({
-            price: 9e16,
-            target: 150_000 * 1e18,
+            price: 9e4,
+            target: 150_000 * 1e6,
             raised: 0,
             startTime: startTimes[3],
             endTime: endTimes[3],
@@ -328,8 +328,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         
         // Round 5: 10¢, $100k target, 30% TGE, 3% bonus
         rounds[4] = Round({
-            price: 10e16,
-            target: 100_000 * 1e18,
+            price: 10e4,
+            target: 100_000 * 1e6,
             raised: 0,
             startTime: startTimes[4],
             endTime: endTimes[4],
@@ -348,7 +348,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
      * @dev Rate limited to $100k per hour per wallet
      * @dev Maximum 10% of round target per single transaction
      * @dev Requires 2-block cooldown between contributions
-     * @param usdcAmount Amount of USDC to contribute (18 decimals on BSC)
+     * @param usdcAmount Amount of USDC to contribute (6 decimals on Base)
      * 
      * Requirements:
      * - Round must be active and not finalized
@@ -880,12 +880,12 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     
     /**
      * @notice Update hourly rate limit
-     * @param newLimit New hourly rate limit in USDC (18 decimals)
+     * @param newLimit New hourly rate limit in USDC (6 decimals)
      * @dev Must be between 100 USDC and 1M USDC
      */
     function updateRateLimit(uint256 newLimit) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 minLimit = 100 * 1e18; // $100 minimum
-        uint256 maxLimit = 1_000_000 * 1e18; // $1M maximum
+        uint256 minLimit = 100 * 1e6; // $100 minimum
+        uint256 maxLimit = 1_000_000 * 1e6; // $1M maximum
         
         if (newLimit < minLimit || newLimit > maxLimit) {
             revert InvalidRateLimit();
