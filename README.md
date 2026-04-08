@@ -22,7 +22,7 @@ contracts/
 - Progressive pricing: $0.06 → $0.10 per token
 - Target raise: $2.5M ($500k soft cap, $2.5M hard cap)
 - Contribution limits: $100 - $10,000 per wallet (cumulative)
-- Vesting: 30-50% TGE unlock + linear 10-month vesting
+- Vesting: 40% TGE unlock + linear 12-month vesting
 - Payment: USDC (native Circle) 6 decimals
 - OpenZeppelin v4.9.6: AccessControl, ReentrancyGuard, Pausable, SafeERC20
 
@@ -254,4 +254,5 @@ docs/
 **Skyharbor Updated V1.2:** December 30, 2025  
 **SEA-16 Fix V1.3:** December 31, 2025  
 **Per-Round Accounting Fix V1.4:** January 1, 2026  
-**Base Migration V1.5:** March 13, 2026
+**Base Migration V1.5:** March 13, 2026  
+**Tokenomics Update V1.6:** April 8, 2026 — Unified TGE unlock to 40%, removed bonuses, extended vesting to 12 months

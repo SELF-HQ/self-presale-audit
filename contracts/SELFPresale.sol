@@ -84,7 +84,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     // Global constraints
     uint256 public constant MIN_CONTRIBUTION = 100 * 1e6; // $100 minimum (USDC 6 decimals on Base)
     uint256 public constant MAX_CONTRIBUTION = 10_000 * 1e6; // $10,000 maximum per wallet
-    uint256 public constant VESTING_DURATION = 10 * 30 days; // 10 months linear vesting
+    uint256 public constant VESTING_DURATION = 12 * 30 days; // 12 months linear vesting
     uint256 public constant SOFT_CAP = 500_000 * 1e6; // $500k soft cap
     uint256 public constant HARD_CAP = 2_500_000 * 1e6; // $2.5M hard cap
     
@@ -278,31 +278,31 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             }
         }
         
-        // Round 1: 6¢, $1.5M target, 50% TGE, 15% bonus
+        // Round 1: 6¢, $1.5M target, 40% TGE, no bonus
         rounds[0] = Round({
             price: 6e4,
             target: 1_500_000 * 1e6,
             raised: 0,
             startTime: startTimes[0],
             endTime: endTimes[0],
-            tgeUnlock: 50,
-            bonus: 15,
+            tgeUnlock: 40,
+            bonus: 0,
             finalized: false
         });
         
-        // Round 2: 7¢, $500k target, 45% TGE, 12% bonus
+        // Round 2: 7¢, $500k target, 40% TGE, no bonus
         rounds[1] = Round({
             price: 7e4,
             target: 500_000 * 1e6,
             raised: 0,
             startTime: startTimes[1],
             endTime: endTimes[1],
-            tgeUnlock: 45,
-            bonus: 12,
+            tgeUnlock: 40,
+            bonus: 0,
             finalized: false
         });
         
-        // Round 3: 8¢, $250k target, 40% TGE, 9% bonus
+        // Round 3: 8¢, $250k target, 40% TGE, no bonus
         rounds[2] = Round({
             price: 8e4,
             target: 250_000 * 1e6,
@@ -310,31 +310,31 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             startTime: startTimes[2],
             endTime: endTimes[2],
             tgeUnlock: 40,
-            bonus: 9,
+            bonus: 0,
             finalized: false
         });
         
-        // Round 4: 9¢, $150k target, 35% TGE, 6% bonus
+        // Round 4: 9¢, $150k target, 40% TGE, no bonus
         rounds[3] = Round({
             price: 9e4,
             target: 150_000 * 1e6,
             raised: 0,
             startTime: startTimes[3],
             endTime: endTimes[3],
-            tgeUnlock: 35,
-            bonus: 6,
+            tgeUnlock: 40,
+            bonus: 0,
             finalized: false
         });
         
-        // Round 5: 10¢, $100k target, 30% TGE, 3% bonus
+        // Round 5: 10¢, $100k target, 40% TGE, no bonus
         rounds[4] = Round({
             price: 10e4,
             target: 100_000 * 1e6,
             raised: 0,
             startTime: startTimes[4],
             endTime: endTimes[4],
-            tgeUnlock: 30,
-            bonus: 3,
+            tgeUnlock: 40,
+            bonus: 0,
             finalized: false
         });
         
@@ -379,7 +379,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         if (tgeEnabled) revert TGEAlreadyEnabled();
         
         Round storage round = rounds[currentRound];
-        if (block.timestamp < round.startTime) revert RoundNotStarted();
+        if (currentRound == 0 && block.timestamp < round.startTime) revert RoundNotStarted();
         if (block.timestamp > round.endTime) revert RoundEnded();
         if (round.finalized) revert RoundAlreadyFinalized();
         
@@ -484,16 +484,16 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     }
     
     /**
-     * @notice Manually finalize current round (if time expired or target reached)
+     * @notice Finalize current round
+     * @dev ROUND_MANAGER can finalize at any time for flexible scheduling.
+     *      Rounds auto-finalize when target is hit (via contribute overflow).
+     *      endTime is enforced as a deadline in contribute(), not here.
      */
     function finalizeRound() external onlyRole(ROUND_MANAGER_ROLE) {
         if (currentRound >= 5) revert NoActiveRound();
         
         Round storage round = rounds[currentRound];
         if (round.finalized) revert RoundAlreadyFinalized();
-        if (block.timestamp <= round.endTime && round.raised < round.target) {
-            revert RoundNotComplete();
-        }
         
         round.finalized = true;
         emit RoundFinalized(currentRound, round.raised);

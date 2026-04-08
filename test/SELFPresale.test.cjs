@@ -89,8 +89,8 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       const round1 = await presale.rounds(0);
       expect(round1.price).to.equal(usdc("0.06"));
       expect(round1.target).to.equal(usdc("1500000"));
-      expect(round1.tgeUnlock).to.equal(50);
-      expect(round1.bonus).to.equal(15);
+      expect(round1.tgeUnlock).to.equal(40);
+      expect(round1.bonus).to.equal(0);
     });
 
     it("Should prevent double initialization", async function () {
@@ -137,10 +137,10 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       
       const contrib = await presale.contributions(user1.address);
       // $1000 / $0.06 = 16,666.666... SELF (rounded up to 16,667)
-      // Bonus 15% = 2,500 SELF
-      // Total = 19,167 SELF
+      // No bonus (0%)
+      // Total = 16,667 SELF
       expect(contrib.totalSELF).to.be.closeTo(
-        ethers.parseEther("19167"),
+        ethers.parseEther("16667"),
         ethers.parseEther("10")
       );
     });
@@ -612,7 +612,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       expect(balanceAfter).to.be.gt(balanceBefore);
     });
 
-    it("Should vest remaining tokens over 10 months", async function () {
+    it("Should vest remaining tokens over 12 months", async function () {
       await presale.connect(user1).claimTokens();
       await time.increase(86400 * 30 * 5);
       const claimable = await presale.getClaimableAmount(user1.address);
