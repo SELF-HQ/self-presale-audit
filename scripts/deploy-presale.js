@@ -58,7 +58,7 @@ async function main() {
   console.log("Admin Address:", adminAddress);
   console.log("\n=== NEXT STEPS ===");
   console.log("1. Transfer SELF tokens to presale contract:");
-  console.log(`   Amount: 42,000,000 SELF (37.7M presale + 4.3M bonus pool)`);
+  console.log(`   Amount: ~38,000,000 SELF (37,934,515 presale allocation — no bonus pool needed)`);
   console.log(`   To: ${presaleAddress}`);
   console.log("2. Initialize rounds using initialize-rounds.js");
   if (!MULTISIG_ADDRESS) {

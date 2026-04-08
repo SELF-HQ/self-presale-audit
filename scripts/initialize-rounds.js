@@ -12,30 +12,39 @@ async function main() {
   
   const presale = await hre.ethers.getContractAt("SELFPresale", PRESALE_ADDRESS);
   
-  // Round dates (Unix timestamps)
-  // Feb 1, 2026 00:00 UTC to Mar 12, 2026 23:59 UTC
+  // Round dates (Unix timestamps) — UPDATE BEFORE CALLING
+  // V1.6 scheduling: Round 1 startTime is the presale launch date.
+  // Subsequent rounds go live immediately when advanced to (no per-round startTime enforcement).
+  // endTimes are safety backstops only. Set generous deadlines.
+  //
+  // ⚠️ ALL timestamps must be in the future at call time.
+  // Generate timestamps: Math.floor(new Date("2026-05-01T00:00:00Z").getTime() / 1000)
   const startTimes = [
-    1769904000, // Round 1: Feb 1, 2026 00:00 UTC
-    1770940800, // Round 2: Feb 13, 2026 00:00 UTC
-    1771804800, // Round 3: Feb 23, 2026 00:00 UTC
-    1772496000, // Round 4: Mar 3, 2026 00:00 UTC
-    1773014400  // Round 5: Mar 9, 2026 00:00 UTC
+    0, // Round 1: UPDATE — presale launch date
+    0, // Round 2: UPDATE — set after Round 1 start (safety endTime)
+    0, // Round 3: UPDATE
+    0, // Round 4: UPDATE
+    0  // Round 5: UPDATE
   ];
   
   const endTimes = [
-    1770940799, // Round 1 ends: Feb 12, 2026 23:59:59 UTC
-    1771804799, // Round 2 ends: Feb 22, 2026 23:59:59 UTC
-    1772495999, // Round 3 ends: Mar 2, 2026 23:59:59 UTC
-    1773014399, // Round 4 ends: Mar 8, 2026 23:59:59 UTC
-    1773359999  // Round 5 ends: Mar 12, 2026 23:59:59 UTC
+    0, // Round 1 ends: UPDATE — generous safety backstop
+    0, // Round 2 ends: UPDATE
+    0, // Round 3 ends: UPDATE
+    0, // Round 4 ends: UPDATE
+    0  // Round 5 ends: UPDATE — final presale deadline
   ];
+
+  if (startTimes.some(t => t === 0) || endTimes.some(t => t === 0)) {
+    throw new Error("Update all timestamps in startTimes[] and endTimes[] before running!");
+  }
   
-  console.log("\nRound Schedule:");
-  console.log("Round 1: Feb 1-12, 2026 | 6¢ | $1.5M | 50% TGE | 15% bonus");
-  console.log("Round 2: Feb 13-22, 2026 | 7¢ | $500k | 45% TGE | 12% bonus");
-  console.log("Round 3: Feb 23-Mar 2, 2026 | 8¢ | $250k | 40% TGE | 9% bonus");
-  console.log("Round 4: Mar 3-8, 2026 | 9¢ | $150k | 35% TGE | 6% bonus");
-  console.log("Round 5: Mar 9-12, 2026 | 10¢ | $100k | 30% TGE | 3% bonus");
+  console.log("\nRound Schedule (V1.6 — 40% TGE all rounds, no bonuses):");
+  console.log("Round 1: 6¢ | $1.5M target | 40% TGE | 0% bonus");
+  console.log("Round 2: 7¢ | $500k target | 40% TGE | 0% bonus");
+  console.log("Round 3: 8¢ | $250k target | 40% TGE | 0% bonus");
+  console.log("Round 4: 9¢ | $150k target | 40% TGE | 0% bonus");
+  console.log("Round 5: 10¢ | $100k target | 40% TGE | 0% bonus");
   
   console.log("\nInitializing rounds...");
   const tx = await presale.initializeRounds(startTimes, endTimes);
@@ -53,7 +62,7 @@ async function main() {
   console.log("Bonus:", round1.bonus.toString(), "%");
   
   console.log("\n=== Initialization Complete ===");
-  console.log("Presale is ready to accept contributions starting Feb 1, 2026!");
+  console.log("Presale is ready. Round 1 goes live at the configured startTime.");
 }
 
 main()
