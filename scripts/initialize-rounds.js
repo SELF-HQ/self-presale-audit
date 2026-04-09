@@ -15,20 +15,21 @@ async function main() {
   // V1.6 scheduling: Round 1 startTime is the presale launch date.
   // Subsequent rounds go live immediately when advanced to (no per-round startTime enforcement).
   // endTimes are 3-month safety backstops. ROUND_MANAGER controls transitions manually.
-  const startTimes = [
-    Math.floor(new Date("2026-05-01T00:00:00Z").getTime() / 1000), // Round 1: presale launch
-    Math.floor(new Date("2026-05-02T00:00:00Z").getTime() / 1000), // Rounds 2-5: sequential for validation only
-    Math.floor(new Date("2026-05-03T00:00:00Z").getTime() / 1000),
-    Math.floor(new Date("2026-05-04T00:00:00Z").getTime() / 1000),
-    Math.floor(new Date("2026-05-05T00:00:00Z").getTime() / 1000),
-  ];
-
+  // Contract requires startTimes[i] > endTimes[i-1], so rounds 2-5 start = previous end + 1s.
   const endTimes = [
     Math.floor(new Date("2026-08-01T00:00:00Z").getTime() / 1000), // Round 1 backstop: Aug 1
     Math.floor(new Date("2026-11-01T00:00:00Z").getTime() / 1000), // Round 2 backstop: Nov 1
     Math.floor(new Date("2027-02-01T00:00:00Z").getTime() / 1000), // Round 3 backstop: Feb 1
     Math.floor(new Date("2027-05-01T00:00:00Z").getTime() / 1000), // Round 4 backstop: May 1
     Math.floor(new Date("2027-08-01T00:00:00Z").getTime() / 1000), // Round 5 backstop: Aug 1
+  ];
+
+  const startTimes = [
+    Math.floor(new Date("2026-05-01T00:00:00Z").getTime() / 1000), // Round 1: presale launch
+    endTimes[0] + 1, // Rounds 2-5: previous endTime + 1s (validation only — go live when advanced to)
+    endTimes[1] + 1,
+    endTimes[2] + 1,
+    endTimes[3] + 1,
   ];
   
   console.log("\nRound Schedule (V1.6 — 40% TGE all rounds, no bonuses):");
