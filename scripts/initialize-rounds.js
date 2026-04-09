@@ -12,32 +12,24 @@ async function main() {
   
   const presale = await hre.ethers.getContractAt("SELFPresale", PRESALE_ADDRESS);
   
-  // Round dates (Unix timestamps) — UPDATE BEFORE CALLING
   // V1.6 scheduling: Round 1 startTime is the presale launch date.
   // Subsequent rounds go live immediately when advanced to (no per-round startTime enforcement).
-  // endTimes are safety backstops only. Set generous deadlines.
-  //
-  // ⚠️ ALL timestamps must be in the future at call time.
-  // Generate timestamps: Math.floor(new Date("2026-05-01T00:00:00Z").getTime() / 1000)
+  // endTimes are 3-month safety backstops. ROUND_MANAGER controls transitions manually.
   const startTimes = [
-    0, // Round 1: UPDATE — presale launch date
-    0, // Round 2: UPDATE — set after Round 1 start (safety endTime)
-    0, // Round 3: UPDATE
-    0, // Round 4: UPDATE
-    0  // Round 5: UPDATE
-  ];
-  
-  const endTimes = [
-    0, // Round 1 ends: UPDATE — generous safety backstop
-    0, // Round 2 ends: UPDATE
-    0, // Round 3 ends: UPDATE
-    0, // Round 4 ends: UPDATE
-    0  // Round 5 ends: UPDATE — final presale deadline
+    Math.floor(new Date("2026-05-01T00:00:00Z").getTime() / 1000), // Round 1: presale launch
+    Math.floor(new Date("2026-05-02T00:00:00Z").getTime() / 1000), // Rounds 2-5: sequential for validation only
+    Math.floor(new Date("2026-05-03T00:00:00Z").getTime() / 1000),
+    Math.floor(new Date("2026-05-04T00:00:00Z").getTime() / 1000),
+    Math.floor(new Date("2026-05-05T00:00:00Z").getTime() / 1000),
   ];
 
-  if (startTimes.some(t => t === 0) || endTimes.some(t => t === 0)) {
-    throw new Error("Update all timestamps in startTimes[] and endTimes[] before running!");
-  }
+  const endTimes = [
+    Math.floor(new Date("2026-08-01T00:00:00Z").getTime() / 1000), // Round 1 backstop: Aug 1
+    Math.floor(new Date("2026-11-01T00:00:00Z").getTime() / 1000), // Round 2 backstop: Nov 1
+    Math.floor(new Date("2027-02-01T00:00:00Z").getTime() / 1000), // Round 3 backstop: Feb 1
+    Math.floor(new Date("2027-05-01T00:00:00Z").getTime() / 1000), // Round 4 backstop: May 1
+    Math.floor(new Date("2027-08-01T00:00:00Z").getTime() / 1000), // Round 5 backstop: Aug 1
+  ];
   
   console.log("\nRound Schedule (V1.6 — 40% TGE all rounds, no bonuses):");
   console.log("Round 1: 6¢ | $1.5M target | 40% TGE | 0% bonus");
@@ -62,7 +54,9 @@ async function main() {
   console.log("Bonus:", round1.bonus.toString(), "%");
   
   console.log("\n=== Initialization Complete ===");
-  console.log("Presale is ready. Round 1 goes live at the configured startTime.");
+  console.log("Round 1 goes live: May 1, 2026 00:00 UTC");
+  console.log("Rounds 2-5 go live instantly when advanced to (ROUND_MANAGER controls transitions).");
+  console.log("End times are 3-month safety backstops per round (Aug 2026 → Aug 2027).");
 }
 
 main()
