@@ -204,7 +204,7 @@ The contract implements comprehensive protection against locked tokens in both s
 **Test Coverage:** 53 passing tests, zero compiler warnings
 
 **Deployed Contracts (Base Mainnet):**
-- SELFToken: *Pending deployment*
+- SELF Token Contract: [0xCBFc34863982f7563774F73004fd231982Ff0303](https://basescan.org/address/0xCBFc34863982f7563774F73004fd231982Ff0303#code)
 - SELFPresale: *Pending deployment*
 
 ## Testing
