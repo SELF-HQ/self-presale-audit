@@ -13,13 +13,11 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  * @notice 5-round presale contract for SELF token on Base with enterprise-grade security
  * @dev Supports multiple rounds with different prices, bonuses, and TGE unlocks
  * @dev IMPORTANT: Base USDC uses 6 decimals (native Circle USDC)
- * 
+ *
  * Security Features:
  * - Role-based access control (RBAC) with multiple roles
  * - Timelock delays (2-7 days) on critical admin functions
  * - Circuit breaker: $500k daily withdrawal limit
- * - Refund mechanism if soft cap ($500k) not reached
- * - Unclaimed refund recovery after 30-day window
  * - ReentrancyGuard on all external state-changing functions
  * - Pausable for emergency stops
  * - SafeERC20 for all token transfers
@@ -29,27 +27,25 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  * - Precision math with rounding in favor of users
  * - Timestamp validation on round initialization
  * - Maximum TGE delay to prevent indefinite fund locking
- * 
+ *
  * Roles:
  * - DEFAULT_ADMIN_ROLE: Super admin (multi-sig recommended)
  * - PAUSER_ROLE: Can pause/unpause contract
  * - ROUND_MANAGER_ROLE: Can manage round lifecycle
  * - TREASURY_ROLE: Can withdraw funds with timelock + circuit breaker
  * - TGE_ENABLER_ROLE: Can enable TGE with timelock
- * 
+ *
  * Architecture:
  * - 5 sequential rounds with progressive pricing
- * - Soft cap: $500k (refunds enabled if not reached)
  * - Hard cap: $2.5M
  * - TGE unlock: 30-50% immediate + bonus
  * - Vesting: 10-month linear for remaining tokens
- * 
+ *
  * @custom:security-contact security@self.app
- * @custom:audit-status Certik Audit - Enhanced Version
  */
 contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     using SafeERC20 for IERC20;
-    
+
     bytes32 private constant ACTION_ENABLE_TGE = keccak256("ENABLE_TGE");
     bytes32 private constant ACTION_EMERGENCY_WITHDRAW_SELF = keccak256("EMERGENCY_WITHDRAW_SELF");
     bytes32 private constant ACTION_WITHDRAW_FUNDS_PREFIX = keccak256("WITHDRAW_FUNDS");
@@ -63,7 +59,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     // Tokens
     IERC20 public immutable USDC;
     IERC20 public immutable SELF;
-    
+
     // Round structure
     struct Round {
         uint256 price;        // Price in USDC (6 decimals) per SELF token (e.g., 6e4 = $0.06)
@@ -75,42 +71,41 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         uint8 bonus;          // Bonus percentage (e.g., 15 = 15%)
         bool finalized;       // Whether round is finalized
     }
-    
+
     // 5 Rounds configuration
     Round[5] public rounds;
     uint256 public currentRound; // 0-4 (Round 1-5)
     bool public roundsInitialized;
-    
+
     // Global constraints
     uint256 public constant MIN_CONTRIBUTION = 100 * 1e6; // $100 minimum (USDC 6 decimals on Base)
     uint256 public constant MAX_CONTRIBUTION = 10_000 * 1e6; // $10,000 maximum per wallet
     uint256 public constant VESTING_DURATION = 12 * 30 days; // 12 months linear vesting
-    uint256 public constant SOFT_CAP = 500_000 * 1e6; // $500k soft cap
     uint256 public constant HARD_CAP = 2_500_000 * 1e6; // $2.5M hard cap
-    
+
     // Timelock delays
     uint256 public constant TIMELOCK_WITHDRAW = 2 days;
     uint256 public constant TIMELOCK_TGE = 2 days;
     uint256 public constant TIMELOCK_EMERGENCY = 7 days;
-    
+
     // Circuit breaker: daily withdrawal limit
     uint256 public constant DAILY_WITHDRAWAL_LIMIT = 500_000 * 1e6; // $500k per day
     uint256 public lastWithdrawalDay;
     uint256 public withdrawnToday;
-    
+
     // Timelock state
     struct TimelockRequest {
         uint256 timestamp;
         bool executed;
     }
-    
+
     mapping(bytes32 => TimelockRequest) public timelockRequests;
-    
+
     // TGE timestamp (set when presale completes)
     uint256 public tgeTime;
     uint256 public pendingTgeTime;
     bool public tgeEnabled;
-    
+
     // Withdrawal requests (supports multiple concurrent timelocks)
     struct WithdrawRequest {
         address treasury;
@@ -119,12 +114,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     uint256 public withdrawRequestNonce;
     mapping(uint256 => bytes32) public withdrawRequestActionByNonce;
     mapping(bytes32 => WithdrawRequest) public withdrawRequests;
-    
-    // Refund mechanism
-    bool public refundEnabled;
-    uint256 public refundDeadline;
-    uint256 public constant REFUND_WINDOW = 30 days;
-    
+
     // User data
     struct UserContribution {
         uint256 totalUSDC;        // Total USDC contributed across all rounds
@@ -133,30 +123,29 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         uint256 tgeUnlockAmount;  // Amount unlockable at TGE
         uint256 vestedAmount;     // Amount subject to vesting
         uint256 claimed;          // Amount already claimed
-        bool refundClaimed;       // Whether user claimed refund
     }
-    
+
     mapping(address => UserContribution) public contributions;
     mapping(address => mapping(uint256 => uint256)) public contributionsByRound; // user => round => USDC amount
-    
+
     uint256 public totalParticipants;
-    uint256 public totalRaised; // Across all rounds (net of refunds)
-    
+    uint256 public totalRaised; // Total USDC raised across all rounds
+
     // Solvency tracking (for token claims)
     uint256 public totalAllocatedSELF; // Total SELF allocated to users (base + bonus)
     uint256 public totalClaimedSELF;   // Total SELF claimed by users
-    
+
     // Rate limiting
     uint256 public maxContributionPerHour = 100_000 * 1e6; // $100k per hour per wallet
     mapping(address => mapping(uint256 => uint256)) public contributionsPerHour; // user => hour => amount
-    
+
     // Flash loan protection
     mapping(address => uint256) public lastContributionBlock;
     uint256 public constant CONTRIBUTION_COOLDOWN = 2; // blocks between contributions
-    
+
     // Whale protection
     uint256 public constant MAX_SINGLE_CONTRIBUTION_PERCENT = 10; // 10% of round max per tx
-    
+
     // Events
     event Contribution(
         address indexed user,
@@ -173,15 +162,12 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     event FundsWithdrawn(address indexed treasury, uint256 amount);
     event EmergencySELFWithdrawn(address indexed admin, address indexed recipient, uint256 amount);
     event ExcessSELFWithdrawn(address indexed treasury, uint256 amount);
-    event RefundEnabled(uint256 deadline);
-    event RefundClaimed(address indexed user, uint256 amount);
-    event UnclaimedRefundsRecovered(address indexed treasury, uint256 amount);
     event TimelockRequested(bytes32 indexed action, uint256 executionTime);
     event TimelockExecuted(bytes32 indexed action);
     event TimelockCancelled(bytes32 indexed action);
     event RateLimitUpdated(uint256 newLimit);
     event CircuitBreakerTriggered(uint256 attemptedAmount, uint256 dailyLimit);
-    
+
     // Custom errors
     error InvalidAddress();
     error RoundsNotInitialized();
@@ -202,14 +188,6 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     error NoAllocation();
     error NothingToClaim();
     error NoFundsToWithdraw();
-    error RefundsNotEnabled();
-    error SoftCapReached();
-    error RefundsAlreadyEnabled();
-    error RefundWindowClosed();
-    error RefundWindowStillActive();
-    error NothingToRefund();
-    error RefundAlreadyClaimed();
-    error RefundsActive();
     error TimelockNotReady();
     error HourlyRateLimitExceeded();
     error ContributionCooldownActive();
@@ -228,11 +206,8 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     error TimelockAlreadyExecutedOrCancelled();
     error TimelockRequestPending();
     error InsufficientSELFBalance();
-    error SoftCapNotReached();
-    error PresaleNotEnded();
     error NoExcessSELF();
-    error RefundWindowNotClosed();
-    
+
     /**
      * @notice Constructor
      * @param _usdc USDC token address on Base
@@ -243,11 +218,11 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         if (_usdc == address(0) || _self == address(0) || _admin == address(0)) {
             revert InvalidAddress();
         }
-        
+
         USDC = IERC20(_usdc);
         SELF = IERC20(_self);
         currentRound = 0;
-        
+
         // Grant roles to admin
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _grantRole(PAUSER_ROLE, _admin);
@@ -255,7 +230,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         _grantRole(TREASURY_ROLE, _admin);
         _grantRole(TGE_ENABLER_ROLE, _admin);
     }
-    
+
     /**
      * @notice Initialize the 5 rounds with parameters
      * @dev Can only be called once by ROUND_MANAGER
@@ -266,18 +241,18 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         uint256[5] calldata endTimes
     ) external onlyRole(ROUND_MANAGER_ROLE) {
         if (roundsInitialized) revert RoundsAlreadyInitialized();
-        
+
         // Validate timestamp ordering
         for (uint256 i = 0; i < 5; i++) {
             if (startTimes[i] <= block.timestamp) revert StartTimeMustBeInFuture();
             if (endTimes[i] <= startTimes[i]) revert EndTimeMustBeAfterStart();
-            
+
             // Validate sequential rounds (each round starts after previous ends)
             if (i > 0) {
                 if (startTimes[i] <= endTimes[i - 1]) revert RoundsMustBeSequential();
             }
         }
-        
+
         // Round 1: 6¢, $1.5M target, 40% TGE, no bonus
         rounds[0] = Round({
             price: 6e4,
@@ -289,7 +264,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             bonus: 0,
             finalized: false
         });
-        
+
         // Round 2: 7¢, $500k target, 40% TGE, no bonus
         rounds[1] = Round({
             price: 7e4,
@@ -301,7 +276,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             bonus: 0,
             finalized: false
         });
-        
+
         // Round 3: 8¢, $250k target, 40% TGE, no bonus
         rounds[2] = Round({
             price: 8e4,
@@ -313,7 +288,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             bonus: 0,
             finalized: false
         });
-        
+
         // Round 4: 9¢, $150k target, 40% TGE, no bonus
         rounds[3] = Round({
             price: 9e4,
@@ -325,7 +300,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             bonus: 0,
             finalized: false
         });
-        
+
         // Round 5: 10¢, $100k target, 40% TGE, no bonus
         rounds[4] = Round({
             price: 10e4,
@@ -337,11 +312,11 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             bonus: 0,
             finalized: false
         });
-        
+
         roundsInitialized = true;
         emit RoundsInitialized();
     }
-    
+
     /**
      * @notice Contribute USDC to current round
      * @dev Protected against reentrancy, flash loans, and whale manipulation
@@ -349,24 +324,24 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
      * @dev Maximum 10% of round target per single transaction
      * @dev Requires 2-block cooldown between contributions
      * @param usdcAmount Amount of USDC to contribute (6 decimals on Base)
-     * 
+     *
      * Requirements:
      * - Round must be active and not finalized
      * - Amount must be between MIN_CONTRIBUTION and MAX_CONTRIBUTION
      * - User's total contributions must not exceed MAX_CONTRIBUTION
      * - Cannot exceed round target
      * - Must respect rate limits and cooldowns
-     * 
+     *
      * Effects:
      * - Transfers USDC from user to contract
      * - Calculates and allocates SELF tokens (base + bonus)
      * - Updates user contribution state
      * - Updates round state
      * - Auto-finalizes round if target reached
-     * 
+     *
      * Emits: {Contribution}
      * May emit: {RoundFinalized} if target reached
-     * 
+     *
      * @custom:security nonReentrant, whenNotPaused
      * @custom:formula selfAmount = (usdcAmount / price) rounded up
      * @custom:formula bonusAmount = selfAmount * bonus%
@@ -375,20 +350,19 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     function contribute(uint256 usdcAmount) external nonReentrant whenNotPaused {
         if (!roundsInitialized) revert RoundsNotInitialized();
         if (currentRound >= 5) revert PresaleEnded();
-        if (refundEnabled) revert RefundsActive();
         if (tgeEnabled) revert TGEAlreadyEnabled();
-        
+
         Round storage round = rounds[currentRound];
         if (currentRound == 0 && block.timestamp < round.startTime) revert RoundNotStarted();
         if (block.timestamp > round.endTime) revert RoundEnded();
         if (round.finalized) revert RoundAlreadyFinalized();
-        
+
         // Flash loan protection - prevent same-block contributions
         if (lastContributionBlock[msg.sender] + CONTRIBUTION_COOLDOWN > block.number) {
             revert ContributionCooldownActive();
         }
         lastContributionBlock[msg.sender] = block.number;
-        
+
         // Validate contribution (dust-safe)
         uint256 remainingCapacity = round.target - round.raised;
         if (usdcAmount < MIN_CONTRIBUTION) {
@@ -401,62 +375,62 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             revert ExceedsMaximum();
         }
         if (usdcAmount > remainingCapacity) revert ExceedsRoundTarget();
-        
+
         // Enforce hard cap across all rounds
         // Note: This is a defense-in-depth safety check. While round targets sum to exactly HARD_CAP
         // ($1.5M + $500k + $250k + $150k + $100k = $2.5M), this check provides additional protection
         // against any potential edge cases or future modifications to round configurations.
         if (totalRaised + usdcAmount > HARD_CAP) revert ExceedsHardCap();
-        
+
         // Whale protection - max 10% of round target per single contribution
         uint256 maxSingleContribution = (round.target * MAX_SINGLE_CONTRIBUTION_PERCENT) / 100;
         if (usdcAmount > maxSingleContribution) {
             revert ExceedsSingleContributionLimit();
         }
-        
+
         // Rate limiting - check hourly limit
         uint256 currentHour = block.timestamp / 1 hours;
         if (contributionsPerHour[msg.sender][currentHour] + usdcAmount > maxContributionPerHour) {
             revert HourlyRateLimitExceeded();
         }
         contributionsPerHour[msg.sender][currentHour] += usdcAmount;
-        
-        // Track new participant (only if not already counted and hasn't claimed refund)
-        if (contributions[msg.sender].totalUSDC == 0 && !contributions[msg.sender].refundClaimed) {
+
+        // Track new participant (only if not already counted)
+        if (contributions[msg.sender].totalUSDC == 0) {
             totalParticipants++;
         }
-        
+
         // Calculate SELF allocation with precision
         // Multiply by 1e18 first to maintain precision during division
         uint256 selfAmount = (usdcAmount * 1e18) / round.price;
-        
+
         // Round up if there's any remainder (favor user)
         uint256 remainder = (usdcAmount * 1e18) % round.price;
         if (remainder > 0) {
             selfAmount += 1;
         }
-        
+
         // Calculate bonus
         uint256 bonusAmount = (selfAmount * round.bonus) / 100;
         uint256 totalSelf = selfAmount + bonusAmount;
-        
+
         // Enforce SELF solvency for allocations (SEA-04)
         uint256 outstanding = totalAllocatedSELF - totalClaimedSELF;
         if (SELF.balanceOf(address(this)) < outstanding + totalSelf) {
             revert InsufficientSELFBalance();
         }
-        
+
         // Calculate TGE unlock amount
         uint256 baseUnlock = (selfAmount * round.tgeUnlock) / 100;
         uint256 tgeUnlock = baseUnlock + bonusAmount;
         uint256 vested = selfAmount - baseUnlock;
-        
+
         // Transfer USDC from user
         USDC.safeTransferFrom(msg.sender, address(this), usdcAmount);
-        
+
         // Update round state
         round.raised += usdcAmount;
-        
+
         // Update user contribution
         UserContribution storage userContrib = contributions[msg.sender];
         userContrib.totalUSDC += usdcAmount;
@@ -464,25 +438,25 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         userContrib.totalBonus += bonusAmount;
         userContrib.tgeUnlockAmount += tgeUnlock;
         userContrib.vestedAmount += vested;
-        
+
         // Track global SELF obligations
         totalAllocatedSELF += totalSelf;
-        
+
         // Track by round
         contributionsByRound[msg.sender][currentRound] += usdcAmount;
-        
+
         // Update global total
         totalRaised += usdcAmount;
-        
+
         emit Contribution(msg.sender, currentRound, usdcAmount, selfAmount, bonusAmount);
-        
+
         // Auto-finalize if target reached
         if (round.raised >= round.target) {
             round.finalized = true;
             emit RoundFinalized(currentRound, round.raised);
         }
     }
-    
+
     /**
      * @notice Finalize current round
      * @dev ROUND_MANAGER can finalize at any time for flexible scheduling.
@@ -491,187 +465,88 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
      */
     function finalizeRound() external onlyRole(ROUND_MANAGER_ROLE) {
         if (currentRound >= 5) revert NoActiveRound();
-        
+
         Round storage round = rounds[currentRound];
         if (round.finalized) revert RoundAlreadyFinalized();
-        
+
         round.finalized = true;
         emit RoundFinalized(currentRound, round.raised);
     }
-    
+
     /**
      * @notice Advance to next round
      */
     function advanceRound() external onlyRole(ROUND_MANAGER_ROLE) {
         if (currentRound >= 5) revert PresaleEnded();
         if (!rounds[currentRound].finalized) revert CurrentRoundNotFinalized();
-        
+
         uint256 oldRound = currentRound;
         currentRound++;
         emit RoundAdvanced(oldRound, currentRound);
     }
-    
+
     /**
      * @notice Request TGE enablement with timelock
      * @param _tgeTime TGE timestamp
      */
     function requestEnableTGE(uint256 _tgeTime) external onlyRole(TGE_ENABLER_ROLE) {
         if (tgeEnabled) revert TGEAlreadyEnabled();
-        if (refundEnabled) revert RefundsActive();
         if (_tgeTime < block.timestamp) revert TGEMustBeInFuture();
         if (_tgeTime > block.timestamp + 365 days) revert TGETooFarInFuture();
-        if (totalRaised < SOFT_CAP) revert SoftCapNotReached();
-        if (currentRound != 5 || !rounds[4].finalized) revert PresaleNotEnded();
-        
+
         TimelockRequest storage existing = timelockRequests[ACTION_ENABLE_TGE];
         if (existing.timestamp != 0 && !existing.executed) revert TimelockRequestPending();
-        
+
         pendingTgeTime = _tgeTime;
         timelockRequests[ACTION_ENABLE_TGE] = TimelockRequest({ timestamp: block.timestamp, executed: false });
-        
+
         emit TimelockRequested(ACTION_ENABLE_TGE, block.timestamp + TIMELOCK_TGE);
     }
-    
+
     /**
      * @notice Execute TGE enablement after timelock
      */
     function executeEnableTGE() external onlyRole(TGE_ENABLER_ROLE) {
         if (tgeEnabled) revert TGEAlreadyEnabled();
-        if (refundEnabled) revert RefundsActive();
-        if (totalRaised < SOFT_CAP) revert SoftCapNotReached();
-        if (currentRound != 5 || !rounds[4].finalized) revert PresaleNotEnded();
-        
+
         TimelockRequest storage request = timelockRequests[ACTION_ENABLE_TGE];
         if (request.timestamp == 0) revert TimelockNotReady();
         if (request.executed) revert TimelockAlreadyExecutedOrCancelled();
         if (block.timestamp < request.timestamp + TIMELOCK_TGE) revert TimelockNotReady();
-        
+
         // Validate pending TGE time is still in the future (may have passed during timelock)
         if (pendingTgeTime < block.timestamp) revert TGEMustBeInFuture();
-        
+
         request.executed = true;
         tgeTime = pendingTgeTime;
         pendingTgeTime = 0;
         tgeEnabled = true;
-        
+
         emit TimelockExecuted(ACTION_ENABLE_TGE);
         emit TGEEnabled(tgeTime);
     }
-    
-    /**
-     * @notice Enable refunds if soft cap not reached
-     */
-    function enableRefunds() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (totalRaised >= SOFT_CAP) revert SoftCapReached();
-        if (currentRound != 5 || !rounds[4].finalized) revert PresaleNotEnded();
-        if (refundEnabled) revert RefundsAlreadyEnabled();
-        if (tgeEnabled) revert TGEAlreadyEnabled();
-        
-        refundEnabled = true;
-        refundDeadline = block.timestamp + REFUND_WINDOW; // 30-day window
-        
-        emit RefundEnabled(refundDeadline);
-    }
-    
-    /**
-     * @notice Claim refund if enabled
-     * @dev Users have 30 days to claim refunds
-     */
-    function claimRefund() external nonReentrant {
-        if (!refundEnabled) revert RefundsNotEnabled();
-        if (block.timestamp > refundDeadline) revert RefundWindowClosed();
-        
-        UserContribution storage userContrib = contributions[msg.sender];
-        if (userContrib.refundClaimed) revert RefundAlreadyClaimed();
-        
-        uint256 amount = userContrib.totalUSDC;
-        if (amount == 0) revert NothingToRefund();
-        
-        uint256 allocatedSelf = userContrib.totalSELF;
-        if (allocatedSelf > 0) {
-            totalAllocatedSELF -= allocatedSelf;
-        }
-        
-        // Update net raised (SEA-11)
-        if (totalRaised >= amount) {
-            totalRaised -= amount;
-        } else {
-            totalRaised = 0;
-        }
-        
-        // Clear allocation to prevent future token claims
-        userContrib.totalUSDC = 0;
-        userContrib.totalSELF = 0;
-        userContrib.totalBonus = 0;
-        userContrib.tgeUnlockAmount = 0;
-        userContrib.vestedAmount = 0;
-        userContrib.claimed = 0;
-        userContrib.refundClaimed = true;
-        
-        // Decrement participant count for accurate statistics
-        if (totalParticipants > 0) {
-            totalParticipants--;
-        }
-        
-        // Update per-round raised amounts and clear user's contributionsByRound
-        for (uint256 i = 0; i < 5; i++) {
-            uint256 roundAmount = contributionsByRound[msg.sender][i];
-            if (roundAmount > 0) {
-                // Decrement round's raised amount to maintain accounting consistency
-                rounds[i].raised -= roundAmount;
-                contributionsByRound[msg.sender][i] = 0;
-            }
-        }
-        
-        // Transfer USDC back
-        USDC.safeTransfer(msg.sender, amount);
-        
-        emit RefundClaimed(msg.sender, amount);
-    }
-    
-    /**
-     * @notice Recover unclaimed refunds after 30-day window expires
-     * @dev Only callable by TREASURY_ROLE after refundDeadline
-     * @dev Sends unclaimed USDC to treasury
-     * @param treasury Address to receive unclaimed funds
-     * 
-     * Security: This prevents USDC from being locked forever in the contract
-     * if users fail to claim refunds within the 30-day window.
-     */
-    function recoverUnclaimedRefunds(address treasury) external onlyRole(TREASURY_ROLE) {
-        if (!refundEnabled) revert RefundsNotEnabled();
-        if (block.timestamp <= refundDeadline) revert RefundWindowStillActive();
-        if (treasury == address(0)) revert InvalidAddress();
-        
-        uint256 balance = USDC.balanceOf(address(this));
-        if (balance == 0) revert NoFundsToWithdraw();
-        
-        USDC.safeTransfer(treasury, balance);
-        emit UnclaimedRefundsRecovered(treasury, balance);
-    }
-    
+
     /**
      * @notice Claim available tokens (TGE unlock + vested amount)
      */
     function claimTokens() external nonReentrant {
         if (!tgeEnabled) revert TGENotEnabled();
         if (block.timestamp < tgeTime) revert TGENotStarted();
-        if (refundEnabled) revert RefundsActive();
-        
+
         UserContribution storage userContrib = contributions[msg.sender];
         if (userContrib.totalSELF == 0) revert NoAllocation();
-        
+
         uint256 claimable = getClaimableAmount(msg.sender);
         if (claimable == 0) revert NothingToClaim();
-        
+
         userContrib.claimed += claimable;
         totalClaimedSELF += claimable;
-        
+
         SELF.safeTransfer(msg.sender, claimable);
-        
+
         emit TokensClaimed(msg.sender, claimable);
     }
-    
+
     /**
      * @notice Get claimable amount for user
      * @param user User address
@@ -681,21 +556,18 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         if (!tgeEnabled || block.timestamp < tgeTime) {
             return 0;
         }
-        if (refundEnabled) {
-            return 0;
-        }
-        
+
         UserContribution memory userContrib = contributions[user];
         if (userContrib.totalSELF == 0) {
             return 0;
         }
-        
+
         uint256 totalUnlocked = userContrib.tgeUnlockAmount;
-        
+
         // Calculate vested amount if past TGE
         if (block.timestamp > tgeTime && userContrib.vestedAmount > 0) {
             uint256 timeElapsed = block.timestamp - tgeTime;
-            
+
             if (timeElapsed >= VESTING_DURATION) {
                 // Fully vested
                 totalUnlocked += userContrib.vestedAmount;
@@ -710,12 +582,12 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
                 totalUnlocked += vestedUnlocked;
             }
         }
-        
+
         // Prevent underflow - return 0 if claimed exceeds unlocked
         if (totalUnlocked <= userContrib.claimed) {
             return 0;
         }
-        
+
         return totalUnlocked - userContrib.claimed;
     }
 
@@ -726,15 +598,11 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
      * @return nonce Withdrawal request nonce
      *
      * Requirements:
-     * - Presale must be ended (currentRound == 5) and final round finalized
-     * - Soft cap must be reached (refunds must be impossible)
-     * - Refunds must not be enabled
+     * - Callable at any time (funds are accessible during and after the presale)
+     * - Subject to the 2-day timelock and $500k/day circuit breaker at execution
      */
     function requestWithdrawFunds(address treasury, uint256 amount) external onlyRole(TREASURY_ROLE) returns (uint256 nonce) {
         if (treasury == address(0)) revert InvalidAddress();
-        if (refundEnabled) revert RefundsActive();
-        if (totalRaised < SOFT_CAP) revert SoftCapNotReached();
-        if (currentRound != 5 || !rounds[4].finalized) revert PresaleNotEnded();
 
         nonce = ++withdrawRequestNonce;
         bytes32 action = keccak256(abi.encode(ACTION_WITHDRAW_FUNDS_PREFIX, treasury, amount, nonce));
@@ -757,9 +625,6 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         if (request.timestamp == 0) revert TimelockNotReady();
         if (request.executed) revert TimelockAlreadyExecutedOrCancelled();
         if (block.timestamp < request.timestamp + TIMELOCK_WITHDRAW) revert TimelockNotReady();
-        if (refundEnabled) revert RefundsActive();
-        if (totalRaised < SOFT_CAP) revert SoftCapNotReached();
-        if (currentRound != 5 || !rounds[4].finalized) revert PresaleNotEnded();
 
         WithdrawRequest memory wr = withdrawRequests[action];
         if (wr.treasury == address(0)) revert InvalidAddress();
@@ -814,7 +679,6 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
      */
     function withdrawExcessSELF(address treasury) external onlyRole(TREASURY_ROLE) {
         if (!tgeEnabled) revert TGENotEnabled();
-        if (refundEnabled) revert RefundsActive();
         if (treasury == address(0)) revert InvalidAddress();
 
         uint256 balance = SELF.balanceOf(address(this));
@@ -827,57 +691,55 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         SELF.safeTransfer(treasury, excess);
         emit ExcessSELFWithdrawn(treasury, excess);
     }
-    
+
     /**
-     * @notice Emergency withdraw SELF tokens (only if presale cancelled or refund window expired)
+     * @notice Emergency withdraw SELF tokens (only before any user allocations exist)
      * @dev Can only be called before TGE is enabled with 7-day timelock
-     * @dev After refund deadline, allows recovery even if allocations exist (users forfeited claims)
+     * @dev Blocked once any user has an allocation, protecting buyers' claims
      */
     function requestEmergencyWithdrawSELF() external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (tgeEnabled) revert TGEAlreadyEnabled();
-        
-        // Allow if refund window has expired (users forfeited their claims)
-        bool refundWindowExpired = refundEnabled && block.timestamp > refundDeadline;
-        if (totalAllocatedSELF > 0 && !refundWindowExpired) revert InsufficientSELFBalance();
-        
+
+        // Only recoverable while no user allocations exist (before anyone has contributed)
+        if (totalAllocatedSELF > 0) revert InsufficientSELFBalance();
+
         TimelockRequest storage existing = timelockRequests[ACTION_EMERGENCY_WITHDRAW_SELF];
         if (existing.timestamp != 0 && !existing.executed) revert TimelockRequestPending();
-        
+
         timelockRequests[ACTION_EMERGENCY_WITHDRAW_SELF] = TimelockRequest({ timestamp: block.timestamp, executed: false });
-        
+
         emit TimelockRequested(ACTION_EMERGENCY_WITHDRAW_SELF, block.timestamp + TIMELOCK_EMERGENCY);
     }
-    
+
     /**
      * @notice Execute emergency SELF withdrawal after timelock
      * @dev Includes TGE check to prevent draining tokens after TGE is enabled
-     * @dev After refund deadline, allows recovery even if allocations exist (users forfeited claims)
+     * @dev Blocked once any user has an allocation, protecting buyers' claims
      */
     function executeEmergencyWithdrawSELF(address recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (recipient == address(0)) revert InvalidAddress();
         // CRITICAL: Prevent emergency withdrawal if TGE was enabled during timelock period
         if (tgeEnabled) revert TGEAlreadyEnabled();
-        
-        // Allow if refund window has expired (users forfeited their claims)
-        bool refundWindowExpired = refundEnabled && block.timestamp > refundDeadline;
-        if (totalAllocatedSELF > 0 && !refundWindowExpired) revert InsufficientSELFBalance();
-        
+
+        // Only recoverable while no user allocations exist (before anyone has contributed)
+        if (totalAllocatedSELF > 0) revert InsufficientSELFBalance();
+
         TimelockRequest storage request = timelockRequests[ACTION_EMERGENCY_WITHDRAW_SELF];
-        
+
         if (request.timestamp == 0) revert TimelockNotReady();
         if (request.executed) revert TimelockAlreadyExecutedOrCancelled();
         if (block.timestamp < request.timestamp + TIMELOCK_EMERGENCY) revert TimelockNotReady();
-        
+
         request.executed = true;
-        
+
         uint256 balance = SELF.balanceOf(address(this));
         if (balance == 0) revert NoFundsToWithdraw();
-        
+
         SELF.safeTransfer(recipient, balance);
         emit EmergencySELFWithdrawn(msg.sender, recipient, balance);
         emit TimelockExecuted(ACTION_EMERGENCY_WITHDRAW_SELF);
     }
-    
+
     /**
      * @notice Update hourly rate limit
      * @param newLimit New hourly rate limit in USDC (6 decimals)
@@ -886,60 +748,60 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     function updateRateLimit(uint256 newLimit) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 minLimit = 100 * 1e6; // $100 minimum
         uint256 maxLimit = 1_000_000 * 1e6; // $1M maximum
-        
+
         if (newLimit < minLimit || newLimit > maxLimit) {
             revert InvalidRateLimit();
         }
-        
+
         maxContributionPerHour = newLimit;
         emit RateLimitUpdated(newLimit);
     }
-    
+
     /**
      * @notice Cancel a pending TGE enablement timelock request
      * @dev Allows TGE enabler to cancel a pending TGE request
      */
     function cancelEnableTGE() external onlyRole(TGE_ENABLER_ROLE) {
         TimelockRequest storage request = timelockRequests[ACTION_ENABLE_TGE];
-        
+
         if (request.timestamp == 0) revert TimelockNotFound();
         if (request.executed) revert TimelockAlreadyExecutedOrCancelled();
-        
+
         request.executed = true;
         pendingTgeTime = 0;
-        
+
         emit TimelockCancelled(ACTION_ENABLE_TGE);
     }
-    
+
     /**
      * @notice Cancel a pending emergency SELF withdrawal timelock request
      * @dev Allows admin to cancel a pending emergency withdrawal
      */
     function cancelEmergencyWithdrawSELF() external onlyRole(DEFAULT_ADMIN_ROLE) {
         TimelockRequest storage request = timelockRequests[ACTION_EMERGENCY_WITHDRAW_SELF];
-        
+
         if (request.timestamp == 0) revert TimelockNotFound();
         if (request.executed) revert TimelockAlreadyExecutedOrCancelled();
-        
+
         request.executed = true;
-        
+
         emit TimelockCancelled(ACTION_EMERGENCY_WITHDRAW_SELF);
     }
-    
+
     /**
      * @notice Pause contributions
      */
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
-    
+
     /**
      * @notice Unpause contributions
      */
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
-    
+
     /**
      * @notice Get current round info
      */
@@ -957,7 +819,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         if (currentRound >= 5) {
             return (5, 0, 0, 0, 0, 0, 0, 0, true);
         }
-        
+
         Round memory round = rounds[currentRound];
         return (
             currentRound + 1,
@@ -971,7 +833,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             round.finalized
         );
     }
-    
+
     /**
      * @notice Get user contribution info
      */
@@ -995,7 +857,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             getClaimableAmount(user)
         );
     }
-    
+
     /**
      * @notice Get excess SELF balance available for withdrawal
      * @dev Returns the amount of SELF tokens that exceed outstanding user claims
@@ -1003,7 +865,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
      * @return excess Amount of excess SELF tokens that can be withdrawn
      * @return balance Current SELF balance in contract
      * @return outstanding Outstanding SELF claims (allocated but not yet claimed)
-     * 
+     *
      * This function enables external monitoring and verification of:
      * - Real-time solvency status
      * - Legitimacy of excess withdrawals
@@ -1016,7 +878,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
     ) {
         balance = SELF.balanceOf(address(this));
         outstanding = totalAllocatedSELF - totalClaimedSELF;
-        
+
         // Only calculate excess if TGE is enabled (when withdrawals are allowed)
         if (tgeEnabled && balance >= outstanding) {
             excess = balance - outstanding;
@@ -1024,7 +886,7 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
             excess = 0;
         }
     }
-    
+
     /**
      * @notice Get total presale stats
      */
@@ -1033,17 +895,14 @@ contract SELFPresale is ReentrancyGuard, Pausable, AccessControl {
         uint256 _totalRaised,
         uint256 _totalParticipants,
         bool _tgeEnabled,
-        uint256 _tgeTime,
-        bool _refundEnabled
+        uint256 _tgeTime
     ) {
         return (
             currentRound + 1,
             totalRaised,
             totalParticipants,
             tgeEnabled,
-            tgeTime,
-            refundEnabled
+            tgeTime
         );
     }
 }
-

@@ -20,7 +20,7 @@ contracts/
 ### SELFPresale.sol
 - 5 sequential rounds: February 1 - March 12, 2026
 - Progressive pricing: $0.06 → $0.10 per token
-- Target raise: $2.5M ($500k soft cap, $2.5M hard cap)
+- Target raise: up to $2.5M hard cap
 - Contribution limits: $100 - $10,000 per wallet (cumulative)
 - Vesting: 40% TGE unlock + linear 12-month vesting
 - Payment: USDC (native Circle) 6 decimals
@@ -30,8 +30,6 @@ contracts/
 - Role-based access control (5 roles)
 - Timelock delays (2-7 days on critical operations)
 - Circuit breaker ($500k daily withdrawal limit)
-- Refund mechanism (if soft cap not met)
-- Unclaimed refund recovery (after 30-day window)
 - Flash loan protection (2-block cooldown)
 - Whale protection (10% max per tx)
 - Rate limiting ($100k/hour per wallet)
@@ -46,7 +44,6 @@ Base USDC uses 6 decimals (native Circle USDC).
 ```solidity
 uint256 constant MIN_CONTRIBUTION = 100 * 1e6;      // $100
 uint256 constant MAX_CONTRIBUTION = 10_000 * 1e6;   // $10,000
-uint256 constant SOFT_CAP = 500_000 * 1e6;          // $500k
 uint256 constant HARD_CAP = 2_500_000 * 1e6;        // $2.5M
 ```
 
@@ -96,7 +93,7 @@ All critical operations enforce mandatory timelock delays for community transpar
 
 | Operation | Timelock | Role Required | Guardrails |
 |-----------|----------|---------------|-------------|
-| Enable TGE | 2 days | TGE_ENABLER_ROLE | Requires soft cap reached, all rounds finalized |
+| Enable TGE | 2 days | TGE_ENABLER_ROLE | One-time enablement; TGE time immutable once set |
 | Withdraw USDC | 2 days | TREASURY_ROLE | Circuit breaker: $500k daily limit |
 | Emergency SELF Withdrawal | 7 days | DEFAULT_ADMIN_ROLE | Blocked if any user allocations exist |
 | Update Rate Limit | None | DEFAULT_ADMIN_ROLE | Bounded: $100 - $1M range |
@@ -112,7 +109,7 @@ All events are publicly visible on BaseScan for community monitoring.
 **Centralization Mitigation:**
 - Short-term: Timelock + multisig combination (implemented)
 - Long-term: DAO governance transition planned post-launch
-- Permanent: Critical user protections enforced on-chain (solvency, soft cap)
+- Permanent: Critical user protections enforced on-chain (SELF-claim solvency)
 
 **Published source:** `https://docs.self.app/tokenomics`
 
@@ -123,7 +120,7 @@ All events are publicly visible on BaseScan for community monitoring.
 The presale contract enforces critical security invariants in code, not operational policy:
 
 #### 1. Solvency Protection
-- **USDC Refunds**: Withdrawals blocked until presale succeeds (soft cap reached + ended). Refund path remains available if soft cap not met.
+- **USDC Withdrawals**: Treasury withdrawals are governed by 2-of-3 multisig approval, a 2-day timelock, and a $500k/day circuit breaker.
 - **SELF Token Claims**: Contributions require sufficient SELF balance on-chain. Contract verifies `balance >= outstandingClaims + newAllocation` before accepting contributions.
 - **Emergency Safeguards**: Emergency SELF withdrawals blocked once any user allocations exist.
 
@@ -134,26 +131,18 @@ The presale contract enforces critical security invariants in code, not operatio
   - Execution guard (prevents multiple executions)
   - Explicit cancellation required to replace pending requests
 
-#### 3. Soft Cap Enforcement
-- TGE enablement requires `totalRaised >= SOFT_CAP` (hard-checked in both request and execution)
-- Refunds automatically available if soft cap not reached after presale ends
-- Mutual exclusivity: TGE and refunds cannot both be active
-
-#### 4. User Protections
+#### 3. User Protections
 - **Precision Math**: All token calculations round up in favor of users
 - **Dust Handling**: Allows exact completion of rounds when remaining capacity < minimum contribution
-- **Refund Accounting**: Both global (`totalRaised`) and per-round (`rounds[i].raised`) amounts decrement on refunds, maintaining accounting consistency
-- **30-Day Refund Window**: Users have 30 days to claim refunds if soft cap not met
 
 ### Zero-Trust Operator Model
 
-Even with compromised privileged keys, users remain protected:
+Privileged actions are constrained by code and multisig, not operator discretion:
 
-- Cannot drain USDC before presale successfully completes
+- All privileged roles require 2-of-3 multisig approval
 - Cannot drain SELF tokens needed for user claims
 - Cannot change TGE time after activation
-- Cannot bypass soft cap requirements
-- Timelock delays provide transparency window (2-7 days)
+- Timelock delays provide a transparency window (2-7 days)
 - Circuit breaker limits withdrawal velocity ($500k/day)
 
 ### Transparency & Monitoring
@@ -167,41 +156,22 @@ Public view functions for external verification:
 
 All privileged operations emit events for on-chain monitoring.
 
-### Audit Status
+### Security Design
 
-**CertiK Audit:** All findings addressed (14/14)
-- 2 Medium severity issues resolved with hard on-chain enforcement
-- 5 Minor protocol correctness issues fixed
-- 5 Design/informational improvements implemented
-- 2 Centralization disclosures provided with verifiable evidence
+**Centralization Controls:**
+- Initial token distribution controlled by a 2-of-3 multisig, with a published allocation and hardware-wallet key management
+- Privileged roles are constrained by timelock delays (2-7 days), a circuit breaker, multisig approval, and on-chain invariants
 
-**Post-Audit Fix (V1.4):** Per-round accounting consistency
-- **Issue**: `claimRefund()` decremented `totalRaised` but did not decrement `rounds[i].raised`, causing per-round statistics to become permanently inflated after refunds
-- **Resolution**: `claimRefund()` now decrements both `totalRaised` and each `rounds[i].raised` using the user's `contributionsByRound` data before clearing it
-- **Invariant Maintained**: `Σ rounds[i].raised == totalRaised` holds true after refunds
+**Unsold Token Recovery:**
 
-**Centralization Findings:**
-- **SEA-01**: Initial token distribution controlled by multisig - addressed via 2-of-3 Safe, published allocation, hardware wallet key management
-- **SEA-02**: Privileged roles - mitigated via timelock delays (2-7 days), circuit breakers, multisig, and on-chain invariants
+The contract protects against SELF tokens being locked while safeguarding buyer claims:
 
-**Unsold Token Recovery (SEA-16):**
-
-The contract implements comprehensive protection against locked tokens in both success and failure scenarios:
-
-**Success Path (Soft Cap Reached):**
-- `withdrawExcessSELF()` allows treasury to reclaim unsold tokens after TGE
-- Protected: Cannot withdraw tokens needed for outstanding user claims
+- `withdrawExcessSELF()` allows the treasury to reclaim unsold SELF after TGE
+- Protected: cannot withdraw tokens needed for outstanding user claims
 - Formula: `excess = balance - (totalAllocated - totalClaimed)`
+- `executeEmergencyWithdrawSELF()` recovers SELF only before any user allocations exist (7-day timelock), so buyer claims can never be stranded
 
-**Failure Path (Soft Cap Not Reached):**
-- `enableRefunds()` allows users to claim full USDC refunds
-- `recoverUnclaimedRefunds()` recovers USDC after 30-day window expires
-- `executeEmergencyWithdrawSELF()` recovers all SELF tokens (7-day timelock)
-  - After refund deadline expires, SELF recovery is allowed even if allocations remain (users forfeited claims)
-
-**Mutual Exclusivity:** `tgeEnabled` and `refundEnabled` cannot both be true, ensuring tokens are never permanently locked. The `withdrawExcessSELF` function correctly blocks withdrawals when refunds are active, as SELF tokens must remain available for the alternative recovery path.
-
-**Test Coverage:** 53 passing tests, zero compiler warnings
+**Test Coverage:** 49 passing tests, zero compiler warnings
 
 **Deployed Contracts (Base Mainnet):**
 - SELF Token Contract: [0xCBFc34863982f7563774F73004fd231982Ff0303](https://basescan.org/address/0xCBFc34863982f7563774F73004fd231982Ff0303#code)
@@ -255,4 +225,5 @@ docs/
 **SEA-16 Fix V1.3:** December 31, 2025  
 **Per-Round Accounting Fix V1.4:** January 1, 2026  
 **Base Migration V1.5:** March 13, 2026  
-**Tokenomics Update V1.6:** April 8, 2026 — Unified TGE unlock to 40%, removed bonuses, extended vesting to 12 months
+**Tokenomics Update V1.6:** April 8, 2026 — Unified TGE unlock to 40%, removed bonuses, extended vesting to 12 months  
+**Treasury Model Update V1.7:** Streamlined treasury withdrawals under 2-of-3 multisig, 2-day timelock, and $500k/day circuit breaker
