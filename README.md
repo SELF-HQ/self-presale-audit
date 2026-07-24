@@ -18,13 +18,27 @@ contracts/
 - OpenZeppelin v4.9.6
 
 ### SELFPresale.sol
-- 5 sequential rounds: February 1 - March 12, 2026
+- 5 sequential rounds with Safe-managed round progression
 - Progressive pricing: $0.06 → $0.10 per token
-- Target raise: up to $2.5M hard cap
+- Presale allocation: exactly 37,934,515 SELF; raise target up to approximately $2.5M
 - Contribution limits: $100 - $10,000 per wallet (cumulative)
 - Vesting: 40% TGE unlock + linear 12-month vesting
+- No round bonuses
 - Payment: USDC (native Circle) 6 decimals
 - OpenZeppelin v4.9.6: AccessControl, ReentrancyGuard, Pausable, SafeERC20
+
+## Current Deployment
+
+The current presale is deployed on Base mainnet and is awaiting its one-time round initialization. Until `initializeRounds` is executed by the Safe, contributions remain closed.
+
+- **Presale:** [0x9D762B5E519d6194aa829F31cF85317FE37Fe35d](https://basescan.org/address/0x9D762B5E519d6194aa829F31cF85317FE37Fe35d#code)
+- **SELF token:** [0xCBFc34863982f7563774F73004fd231982Ff0303](https://basescan.org/address/0xCBFc34863982f7563774F73004fd231982Ff0303#code)
+- **Base USDC:** [0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
+- **Safe controlling all roles:** [0x8b2fE271c13C94c679b1fF69466C2D6d034b2e8c](https://app.safe.global/home?safe=base:0x8b2fE271c13C94c679b1fF69466C2D6d034b2e8c)
+- **Funded allocation:** exactly **37,934,515 SELF**
+- **Verification:** exact-match source verified on BaseScan
+
+Contributions are final under the contract and are not subject to a minimum aggregate raise condition. Presale proceeds may be transferred by the Safe subject to the contract's two-day withdrawal delay and $500,000 daily limit. Round progression and TGE scheduling are administered through the Safe-controlled roles.
 
 ### Security Features
 - Role-based access control (5 roles)
@@ -54,12 +68,12 @@ uint256 constant HARD_CAP = 2_500_000 * 1e6;        // $2.5M
 
 **Initial Distribution:**
 - All tokens minted to multisig wallet: `0x8b2fE271c13C94c679b1fF69466C2D6d034b2e8c`
-- Presale allocation transferred to presale contract: sufficient for all potential claims
+- Exactly 37,934,515 SELF allocated and transferred to the current presale contract
 - Remaining tokens retained by multisig for ecosystem development
 
 **Security Measures (SEA-01):**
 - 2-of-3 multisig controls all undistributed tokens
-- Private key security managed via hardware wallets and geographic distribution
+- Safe threshold and owners are publicly verifiable on Base
 - Full token allocation published at: `https://docs.self.app/tokenomics`
 - Team committed to implementing vesting schedules for non-presale allocations
 
@@ -76,7 +90,7 @@ All privileged contract roles and undistributed tokens are controlled by a 2-of-
 - Signer 2: `0xD7286BB3983316FF3b2e8A27CABc976aA820Ac97`
 - Signer 3: `0xF1164C0208168676DF682f7b66AFF4921ec4bF32`
 
-**Verification:** Multisig configuration (threshold and owners) can be verified upon request via screen-share or by providing a verification script. Role assignments on the presale contract are publicly verifiable via BaseScan.
+**Verification:** The Safe threshold and owners, together with presale role assignments, are publicly verifiable on Base.
 
 ### Contract Roles Assigned to Multisig
 - DEFAULT_ADMIN_ROLE
@@ -85,7 +99,7 @@ All privileged contract roles and undistributed tokens are controlled by a 2-of-
 - ROUND_MANAGER_ROLE
 - PAUSER_ROLE
 
-*All privileged operations require 2-of-3 signer approval plus a timelock delay.*
+*All privileged operations require approval under the 2-of-3 Safe policy. TGE enablement, treasury withdrawals, and emergency SELF recovery additionally enforce on-chain delays.*
 
 ### Timelock Operations (SEA-02)
 
@@ -142,7 +156,7 @@ Privileged actions are constrained by code and multisig, not operator discretion
 - All privileged roles require 2-of-3 multisig approval
 - Cannot drain SELF tokens needed for user claims
 - Cannot change TGE time after activation
-- Timelock delays provide a transparency window (2-7 days)
+- TGE enablement, treasury withdrawals, and emergency SELF recovery provide on-chain transparency windows (2-7 days)
 - Circuit breaker limits withdrawal velocity ($500k/day)
 
 ### Transparency & Monitoring
@@ -159,8 +173,8 @@ All privileged operations emit events for on-chain monitoring.
 ### Security Design
 
 **Centralization Controls:**
-- Initial token distribution controlled by a 2-of-3 multisig, with a published allocation and hardware-wallet key management
-- Privileged roles are constrained by timelock delays (2-7 days), a circuit breaker, multisig approval, and on-chain invariants
+- Initial token distribution is controlled by a 2-of-3 multisig with a published allocation
+- Privileged roles are constrained by multisig approval and on-chain invariants; selected TGE and treasury actions also enforce timelocks and a circuit breaker
 
 **Unsold Token Recovery:**
 
@@ -175,7 +189,7 @@ The contract protects against SELF tokens being locked while safeguarding buyer 
 
 **Deployed Contracts (Base Mainnet):**
 - SELF Token Contract: [0xCBFc34863982f7563774F73004fd231982Ff0303](https://basescan.org/address/0xCBFc34863982f7563774F73004fd231982Ff0303#code)
-- SELFPresale: *Pending deployment*
+- SELFPresale: [0x9D762B5E519d6194aa829F31cF85317FE37Fe35d](https://basescan.org/address/0x9D762B5E519d6194aa829F31cF85317FE37Fe35d#code) — verified, funded with exactly 37,934,515 SELF, and awaiting initialization
 
 ## Testing
 
@@ -214,8 +228,8 @@ docs/
 
 **Network:** Base Mainnet  
 **USDC:** `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`  
-**Compiler:** Solidity 0.8.20  
-**Launch:** February 1, 2026
+**Compiler:** Solidity 0.8.20, optimizer enabled with 200 runs  
+**Status:** Deployed, exact-match verified, funded, and awaiting one-time round initialization
 
 ---
 
@@ -226,4 +240,5 @@ docs/
 **Per-Round Accounting Fix V1.4:** January 1, 2026  
 **Base Migration V1.5:** March 13, 2026  
 **Tokenomics Update V1.6:** April 8, 2026 — Unified TGE unlock to 40%, removed bonuses, extended vesting to 12 months  
-**Treasury Model Update V1.7:** Streamlined treasury withdrawals under 2-of-3 multisig, 2-day timelock, and $500k/day circuit breaker
+**Treasury Model Update V1.7:** Streamlined treasury withdrawals under 2-of-3 multisig, 2-day timelock, and $500k/day circuit breaker  
+**Current Deployment V1.8:** Base mainnet exact-match deployment at `0x9D762B5E519d6194aa829F31cF85317FE37Fe35d`; no refund mechanism or minimum aggregate raise condition

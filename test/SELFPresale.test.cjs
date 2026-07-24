@@ -331,7 +331,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
 
   describe("TGE with Timelock", function () {
     beforeEach(async function () {
-      // Complete all 5 rounds with soft cap reached
+      // Complete all 5 rounds with funded contribution activity
       const amountPerWallet = usdc("10000");
 
       for (let i = 0; i < 5; i++) {
@@ -340,7 +340,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
           await time.increaseTo(startTimes[i]);
         }
 
-        // Reach soft cap in round 1 using random wallets
+        // Add contribution activity in round 1 using random wallets
         if (i === 0) {
           const walletsNeeded = 50;
           for (let w = 0; w < walletsNeeded; w++) {
@@ -415,7 +415,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       ).to.be.revertedWithCustomError(presale, "TimelockNotReady");
     });
 
-    it("Should allow withdrawal during an active presale (no soft cap / round-finalization gate)", async function () {
+    it("Should allow withdrawal during an active presale", async function () {
       // Funds must be reachable mid-presale, subject only to timelock + circuit breaker.
       await presale
         .connect(admin)
@@ -432,7 +432,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should allow withdrawal after presale end", async function () {
-      // Reach soft cap using random wallets
+      // Add sufficient USDC activity for the withdrawal scenario
       const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
       for (let w = 0; w < walletsNeeded; w++) {
@@ -471,7 +471,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should enforce circuit breaker - daily withdrawal limit", async function () {
-      // Reach soft cap using random wallets
+      // Add sufficient USDC activity for the circuit-breaker scenario
       const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
       for (let w = 0; w < walletsNeeded; w++) {
@@ -509,7 +509,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     });
 
     it("Should allow multiple queued withdrawals to execute independently (SEA-10)", async function () {
-      // Reach soft cap using random wallets
+      // Add sufficient USDC activity for multiple withdrawals
       const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
       for (let w = 0; w < walletsNeeded; w++) {
@@ -566,7 +566,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     beforeEach(async function () {
       const amountPerWallet = usdc("10000");
 
-      // Complete all rounds with soft cap reached
+      // Complete all rounds with funded contribution activity
       for (let i = 0; i < 5; i++) {
         const currentTime = await time.latest();
         if (startTimes[i] > currentTime) {
@@ -574,7 +574,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         }
 
         if (i === 0) {
-          // Reach soft cap using random wallets
+          // Add contribution activity in round 1 using random wallets
           const walletsNeeded = 50;
           for (let w = 0; w < walletsNeeded; w++) {
             const wallet = ethers.Wallet.createRandom().connect(
@@ -631,7 +631,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
     beforeEach(async function () {
       const amountPerWallet = usdc("10000");
 
-      // Complete all rounds with soft cap reached
+      // Complete all rounds with funded contribution activity
       for (let i = 0; i < 5; i++) {
         const currentTime = await time.latest();
         if (startTimes[i] > currentTime) {
@@ -639,7 +639,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
         }
 
         if (i === 0) {
-          // Reach soft cap using random wallets
+          // Add contribution activity in round 1 using random wallets
           const walletsNeeded = 50;
           for (let w = 0; w < walletsNeeded; w++) {
             const wallet = ethers.Wallet.createRandom().connect(
@@ -761,7 +761,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       // Move to round 1 start
       await time.increaseTo(sTimes[0]);
 
-      // We will do 50 contributions of $10,000 in round 1 to reach exactly the $500k soft cap.
+      // Use 50 contributions of $10,000 to create an exact $500k allocation scenario.
       const amountPerWallet = usdc("10000");
       const walletsNeeded = 50;
 
@@ -847,7 +847,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       const amountPerWallet = usdc("10000");
       await time.increaseTo(startTimes[0]);
 
-      // Reach soft cap
+      // Add contribution activity
       for (let w = 0; w < 50; w++) {
         const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
         await admin.sendTransaction({
@@ -882,7 +882,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       const amountPerWallet = usdc("10000");
       await time.increaseTo(startTimes[0]);
 
-      // Reach soft cap
+      // Add contribution activity
       for (let w = 0; w < 50; w++) {
         const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
         await admin.sendTransaction({
@@ -987,7 +987,7 @@ describe("SELFPresale - Enhanced Security Test Suite", function () {
       // Request emergency withdrawal (no allocations yet)
       await freshPresale.connect(admin).requestEmergencyWithdrawSELF();
 
-      // Now make contributions to reach soft cap (this will block emergency withdrawal)
+      // Create user allocations, which block emergency withdrawal
       const amountPerWallet = usdc("10000");
       await time.increaseTo(freshStartTimes[0]);
 
